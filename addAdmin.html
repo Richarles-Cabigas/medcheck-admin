@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MedCheck Admin — Add Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="topbar-brand">
+        <div class="mark">MC</div>
+        <div class="title">MedCheck<span>Admin Portal</span></div>
+      </div>
+      <div class="topbar-account">
+        <button class="btn-logout" id="back-to-dashboard">
+          ← Back to dashboard
+        </button>
+      </div>
+    </div>
+
+    <div class="login-screen" style="min-height: calc(100vh - 63px)">
+      <div class="login-card">
+        <div class="login-mark">MC</div>
+        <h1>Add a new admin</h1>
+        <p class="subtitle">Create login credentials for another admin.</p>
+
+        <div class="login-error" id="add-admin-error"></div>
+
+        <div class="field">
+          <label for="new-admin-email">Email</label>
+          <input type="email" id="new-admin-email" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="new-admin-password">Temporary password</label>
+          <input type="password" id="new-admin-password" autocomplete="off" />
+        </div>
+
+        <button class="btn-primary" id="add-admin-submit">
+          Create admin account
+        </button>
+      </div>
+    </div>
+
+    <script type="module" src="js/addAdmin.js"></script>
+  </body>
+</html>

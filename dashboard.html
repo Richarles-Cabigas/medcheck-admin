@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MedCheck Admin — Doctor Verification</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="topbar-brand">
+        <div class="mark">MC</div>
+        <div class="title">MedCheck<span>Admin Portal</span></div>
+      </div>
+      <div class="topbar-account">
+        <span id="account-label"></span>
+        <a
+          href="addAdmin.html"
+          class="btn-logout"
+          style="text-decoration: none; margin-right: 8px"
+          >+ Add Admin</a
+        >
+        <button class="btn-logout" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <h2>Doctor verification</h2>
+          <p>
+            Review submitted PRC licenses before doctors get full account
+            access.
+          </p>
+        </div>
+        <input
+          type="text"
+          id="search-input"
+          class="search-input"
+          placeholder="Search name, license, email…"
+        />
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-status="Pending">
+          Pending <span class="count" id="count-pending">0</span>
+        </button>
+        <button class="tab" data-status="Verified">
+          Verified <span class="count" id="count-verified">0</span>
+        </button>
+        <button class="tab" data-status="Rejected">
+          Rejected <span class="count" id="count-rejected">0</span>
+        </button>
+      </div>
+
+      <div class="loading-row" id="loading-row">Loading doctors…</div>
+
+      <div class="card-grid" id="card-grid"></div>
+
+      <div class="empty-state" id="empty-state" style="display: none">
+        <div class="icon" id="empty-icon">✅</div>
+        <h3 id="empty-title">Nothing waiting on you</h3>
+        <p id="empty-desc">
+          New doctor registrations will appear here for review.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══ Review panel ═══ -->
+    <div class="overlay" id="overlay"></div>
+    <div class="review-panel" id="review-panel">
+      <div class="review-header">
+        <h3 id="review-name">Doctor name</h3>
+        <button class="btn-close" id="review-close">✕</button>
+      </div>
+
+      <div class="review-body">
+        <div
+          class="decision-history"
+          id="decision-history"
+          style="display: none"
+        ></div>
+
+        <a
+          class="prc-check-link"
+          id="prc-check-link"
+          href="https://online1.prc.gov.ph/verification"
+          target="_blank"
+          rel="noopener"
+        >
+          ↗ Open PRC's official license verification portal
+        </a>
+
+        <!-- Claim (what the doctor typed) vs Evidence (what they uploaded) -->
+        <div class="claim-evidence">
+          <div class="claim-block">
+            <div class="block-label">Claimed details</div>
+            <div class="claim-rows">
+              <div class="claim-row">
+                <div class="k">Full name</div>
+                <div class="v" id="claim-name">—</div>
+              </div>
+              <div class="claim-row">
+                <div class="k">PRC license number</div>
+                <div class="v mono" id="claim-license">—</div>
+              </div>
+              <div class="claim-row">
+                <div class="k">Specialization</div>
+                <div class="v" id="claim-specialization">—</div>
+              </div>
+              <div class="claim-row">
+                <div class="k">Phone</div>
+                <div class="v mono" id="claim-phone">—</div>
+              </div>
+              <div class="claim-row">
+                <div class="k">Email</div>
+                <div class="v" id="claim-email">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="evidence-block">
+            <div class="block-label">Submitted PRC ID</div>
+            <img id="evidence-img" src="" alt="PRC ID" />
+          </div>
+        </div>
+
+        <div class="reject-reason-field" id="reject-reason-field">
+          <label for="reject-reason-input"
+            >Reason for rejection (shown to the doctor)</label
+          >
+          <textarea
+            id="reject-reason-input"
+            placeholder="e.g. Photo is blurry, license number doesn't match the name on record…"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="review-footer">
+        <button class="btn-cancel" id="btn-cancel" style="display: none">
+          Back
+        </button>
+        <button class="btn-reject" id="btn-reject">Reject</button>
+        <button
+          class="btn-reject-confirm"
+          id="btn-reject-confirm"
+          style="display: none"
+        >
+          Confirm reject
+        </button>
+        <button class="btn-approve" id="btn-approve">Approve doctor</button>
+      </div>
+    </div>
+
+    <!-- ═══ Lightbox for full-size PRC ID ═══ -->
+    <div class="lightbox" id="lightbox">
+      <img id="lightbox-img" src="" alt="PRC ID full size" />
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script type="module" src="js/dashboard.js"></script>
+  </body>
+</html>
