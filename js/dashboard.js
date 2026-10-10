@@ -77,6 +77,8 @@ const claimSpecialization = document.getElementById("claim-specialization");
 const claimPhone = document.getElementById("claim-phone");
 const claimEmail = document.getElementById("claim-email");
 const evidenceImg = document.getElementById("evidence-img");
+const evidenceBackSection = document.getElementById("evidence-back-section");
+const evidenceBackImg = document.getElementById("evidence-back-img");
 const decisionHistory = document.getElementById("decision-history");
 const rejectReasonField = document.getElementById("reject-reason-field");
 const rejectReasonInput = document.getElementById("reject-reason-input");
@@ -136,6 +138,7 @@ function startListening() {
           phone: val.phone || "—",
           email: val.email || "—",
           prcIdImageUrl: val.prcIdImageUrl || "",
+          prcIdBackImageUrl: val.prcIdBackImageUrl || "",
           verificationStatus: val.verificationStatus || "Pending",
           registeredAt: val.registeredAt || 0,
           reviewedBy: val.reviewedBy || "",
@@ -283,7 +286,17 @@ function openReviewPanel(d, fromRefresh) {
   claimEmail.textContent = d.email;
 
   evidenceImg.src = d.prcIdImageUrl || "";
-  evidenceImg.alt = `PRC ID submitted by ${d.name}`;
+  evidenceImg.alt = `PRC ID (front) submitted by ${d.name}`;
+
+  // Older registrations have no back image, so hide that section
+  if (d.prcIdBackImageUrl) {
+    evidenceBackImg.src = d.prcIdBackImageUrl;
+    evidenceBackImg.alt = `PRC ID (back) submitted by ${d.name}`;
+    evidenceBackSection.style.display = "block";
+  } else {
+    evidenceBackImg.removeAttribute("src");
+    evidenceBackSection.style.display = "none";
+  }
 
   // Show prior decision info if this doctor was already reviewed once
   // (e.g. re-reviewing after a rejection + resubmission)
@@ -327,6 +340,11 @@ overlay.addEventListener("click", closeReviewPanel);
 evidenceImg.addEventListener("click", () => {
   if (!evidenceImg.src) return;
   lightboxImg.src = evidenceImg.src;
+  lightbox.classList.add("visible");
+});
+evidenceBackImg.addEventListener("click", () => {
+  if (!evidenceBackImg.src) return;
+  lightboxImg.src = evidenceBackImg.src;
   lightbox.classList.add("visible");
 });
 lightbox.addEventListener("click", () => lightbox.classList.remove("visible"));
