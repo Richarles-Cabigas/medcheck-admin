@@ -287,9 +287,9 @@ const ACTIVITY_CATEGORY_MAP = {
   CONSULTATION_REQUEST_ACCEPTED: "Consultation",
   CONSULTATION_REQUEST_DECLINED: "Consultation",
   CONSULTATION_COMPLETED: "Consultation",
-  HIGH_RISK_INTERACTION_REVIEWED: "Medication Safety",
-  MEDICATION_REQUEST_APPROVED: "Medication Safety",
-  MEDICATION_REQUEST_REJECTED: "Medication Safety",
+  HIGH_RISK_INTERACTION_REVIEWED: "Medication Safety Review",
+  MEDICATION_REQUEST_APPROVED: "Medication Safety Review",
+  MEDICATION_REQUEST_REJECTED: "Medication Safety Review",
   MEDICATION_ADDED: "Medication Management",
   MEDICATION_UPDATED: "Medication Management",
   MEDICATION_DISCONTINUED: "Medication Management",
@@ -441,7 +441,7 @@ function renderActivityView() {
     (a) => a.category === "Consultation",
   ).length;
   statMedSafety.textContent = allActivities.filter(
-    (a) => a.category === "Medication Safety",
+    (a) => a.category === "Medication Safety Review",
   ).length;
 
   activityTableBody.innerHTML = "";
