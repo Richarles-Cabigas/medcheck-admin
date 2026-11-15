@@ -13,6 +13,8 @@ import {
   equalTo,
   onValue,
   update,
+  push,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { firebaseConfig } from "./firebase-init.js";
 
@@ -139,10 +141,22 @@ const activityStatusFilter = document.getElementById("activity-status-filter");
 const activityDateFrom = document.getElementById("activity-date-from");
 const activityDateTo = document.getElementById("activity-date-to");
 const activityTableBody = document.getElementById("activity-table-body");
-const statTotal = document.getElementById("stat-total");
-const statActiveDoctors = document.getElementById("stat-active-doctors");
-const statConsultations = document.getElementById("stat-consultations");
-const statMedSafety = document.getElementById("stat-med-safety");
+const statToday = document.getElementById("stat-today");
+const statAttention = document.getElementById("stat-attention");
+const statPending = document.getElementById("stat-pending");
+const statActiveUsers = document.getElementById("stat-active-users");
+const activityRoleFilter = document.getElementById("activity-role-filter");
+const activitySeverityFilter = document.getElementById(
+  "activity-severity-filter",
+);
+const activityClearBtn = document.getElementById("activity-clear-btn");
+const activityExportBtn = document.getElementById("activity-export-btn");
+const activityLoadMore = document.getElementById("activity-load-more");
+const activityLoadMoreBtn = document.getElementById("activity-load-more-btn");
+const activityChangesBlock = document.getElementById("activity-changes-block");
+const activityChanges = document.getElementById("activity-changes");
+const activityReasonBlock = document.getElementById("activity-reason-block");
+const activityReason = document.getElementById("activity-reason");
 
 const activityDetailPanel = document.getElementById("activity-detail-panel");
 const activityDetailTitle = document.getElementById("activity-detail-title");
@@ -197,6 +211,12 @@ logoutBtn.addEventListener("click", () => {
 logoutCancelBtn.addEventListener("click", closeLogoutConfirm);
 
 logoutConfirmBtn.addEventListener("click", async () => {
+  await writeAuditLog({
+    activityType: "ADMIN_LOGOUT",
+    category: "Admin Action",
+    description: "Admin signed out",
+    status: "Signed out",
+  });
   await signOut(auth);
   window.location.href = "index.html";
 });
@@ -269,16 +289,54 @@ function startListening() {
   );
 }
 
-// ── Activity logs ────────────────────────────────────────────────────
+// ── Audit log writer (admin actions) ─────────────────────────────────
+// Entries are append-only (database rules block edits and deletes) and
+// stamped with the SERVER's clock, so they can't be backdated.
+function cleanForFirebase(obj) {
+  const out = {};
+  Object.entries(obj).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === "") return;
+    out[k] = v;
+  });
+  return out;
+}
+
+async function writeAuditLog(entry) {
+  if (!currentAdminUid) return;
+  try {
+    await push(
+      ref(db, "activityLogs"),
+      cleanForFirebase({
+        actorUid: currentAdminUid,
+        actorName: currentAdminEmail || "Admin",
+        actorRole: "admin",
+        severity: "info",
+        ...entry,
+        timestamp: serverTimestamp(),
+        platform: "web-admin",
+      }),
+    );
+  } catch (err) {
+    // A failed log must never block the admin's real action.
+    console.error("Couldn't write audit log:", err);
+  }
+}
+
+// ── Activity logs (audit trail) ──────────────────────────────────────
+const ACTIVITY_PAGE_SIZE = 100;
 let allActivities = [];
-let activityFilters = {
+let activityVisibleLimit = ACTIVITY_PAGE_SIZE;
+const DEFAULT_ACTIVITY_FILTERS = {
   category: "All",
+  role: "All",
   doctor: "All",
+  severity: "All",
   status: "All",
   dateFrom: "",
   dateTo: "",
   search: "",
 };
+let activityFilters = { ...DEFAULT_ACTIVITY_FILTERS };
 
 const ACTIVITY_CATEGORY_MAP = {
   CONSULTATION_POSTED: "Consultation",
@@ -300,8 +358,29 @@ const ACTIVITY_CATEGORY_MAP = {
   PROFILE_UPDATED: "Account",
   DOCTOR_LOGIN: "Account",
   DOCTOR_LOGOUT: "Account",
-  DOCTOR_LOGIN: "Account",
-  DOCTOR_LOGOUT: "Account",
+  DOCTOR_REGISTERED: "Verification",
+  DOCTOR_RESUBMITTED: "Verification",
+  CREDENTIAL_UPDATE_REQUESTED: "Verification",
+  ADMIN_DOCTOR_APPROVED: "Admin Action",
+  ADMIN_DOCTOR_REJECTED: "Admin Action",
+  ADMIN_MOVED_TO_PENDING: "Admin Action",
+  ADMIN_CREATED: "Admin Action",
+  ADMIN_LOGIN: "Admin Action",
+  ADMIN_LOGOUT: "Admin Action",
+  ADMIN_VIEWED_DOCUMENTS: "Data Access",
+  ADMIN_EXPORTED_LOGS: "Data Access",
+  PATIENT_RECORD_VIEWED: "Data Access",
+  LOGIN_FAILED: "Security",
+};
+
+// Used only when an older log has no stored severity.
+const SEVERITY_BY_TYPE = {
+  ADMIN_DOCTOR_REJECTED: "warning",
+  ADMIN_MOVED_TO_PENDING: "warning",
+  ADMIN_CREATED: "warning",
+  CREDENTIAL_UPDATE_REQUESTED: "warning",
+  HIGH_RISK_INTERACTION_REVIEWED: "warning",
+  LOGIN_FAILED: "warning",
 };
 
 function humanizeActivityType(type) {
@@ -333,31 +412,47 @@ function getStatusBadgeClass(status) {
     "updated",
     "reviewed",
     "posted",
+    "verified",
+    "created",
   ];
   if (negative.some((k) => s.includes(k))) return "status-negative";
   if (positive.some((k) => s.includes(k))) return "status-positive";
   return "status-neutral";
 }
 
+function normalizeActivity(id, val) {
+  const type = val.activityType || "";
+  const actorUid = val.actorUid || val.doctorUid || "";
+  return {
+    id,
+    actorUid,
+    actorName: val.actorName || val.doctorName || "Unknown user",
+    // Older logs only ever came from doctors
+    actorRole: val.actorRole || (val.doctorUid ? "doctor" : ""),
+    activityType: type,
+    category: val.category || ACTIVITY_CATEGORY_MAP[type] || "Other",
+    severity: val.severity || SEVERITY_BY_TYPE[type] || "info",
+    patientUid: val.patientUid || "",
+    patientCode: val.patientCode || "",
+    targetUid: val.targetUid || "",
+    targetName: val.targetName || "",
+    description: val.description || humanizeActivityType(type),
+    status: val.status || "",
+    timestamp: Number(val.timestamp) || 0,
+    relatedRecordId: val.relatedRecordId || "",
+    reason: val.reason || "",
+    changes:
+      val.changes && typeof val.changes === "object" ? val.changes : null,
+    appVersion: val.appVersion || "",
+    platform: val.platform || "",
+  };
+}
+
 function startActivityListening() {
   onValue(ref(db, "activityLogs"), (snapshot) => {
     allActivities = [];
     snapshot.forEach((child) => {
-      const val = child.val() || {};
-      allActivities.push({
-        id: child.key,
-        doctorUid: val.doctorUid || "",
-        doctorName: val.doctorName || "Unknown doctor",
-        activityType: val.activityType || "",
-        category:
-          val.category || ACTIVITY_CATEGORY_MAP[val.activityType] || "Other",
-        patientUid: val.patientUid || "",
-        patientCode: val.patientCode || "",
-        description: val.description || humanizeActivityType(val.activityType),
-        status: val.status || "",
-        timestamp: val.timestamp || 0,
-        relatedRecordId: val.relatedRecordId || "",
-      });
+      allActivities.push(normalizeActivity(child.key, child.val() || {}));
     });
     renderActivityFilterOptions();
     renderActivityView();
@@ -365,30 +460,20 @@ function startActivityListening() {
 }
 
 function renderActivityFilterOptions() {
-  const doctors = Array.from(
-    new Set(allActivities.map((a) => a.doctorName)),
+  const people = Array.from(
+    new Set(allActivities.map((a) => a.actorName)),
   ).sort();
   const statuses = Array.from(
     new Set(allActivities.map((a) => a.status).filter(Boolean)),
   ).sort();
 
-  const keepOrReset = (select, options, current) =>
-    options.includes(current) ? current : "All";
-
-  activityFilters.doctor = keepOrReset(
-    activityDoctorFilter,
-    doctors,
-    activityFilters.doctor,
-  );
-  activityFilters.status = keepOrReset(
-    activityStatusFilter,
-    statuses,
-    activityFilters.status,
-  );
+  if (!people.includes(activityFilters.doctor)) activityFilters.doctor = "All";
+  if (!statuses.includes(activityFilters.status))
+    activityFilters.status = "All";
 
   activityDoctorFilter.innerHTML =
-    `<option value="All">All doctors</option>` +
-    doctors
+    `<option value="All">All users</option>` +
+    people
       .map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`)
       .join("");
   activityDoctorFilter.value = activityFilters.doctor;
@@ -401,76 +486,93 @@ function renderActivityFilterOptions() {
   activityStatusFilter.value = activityFilters.status;
 }
 
-function renderActivityView() {
-  let filtered = allActivities.slice();
+function getFilteredActivities() {
+  const f = activityFilters;
+  let list = allActivities.slice();
 
-  if (activityFilters.category !== "All") {
-    filtered = filtered.filter((a) => a.category === activityFilters.category);
+  if (f.category !== "All")
+    list = list.filter((a) => a.category === f.category);
+  if (f.role !== "All") list = list.filter((a) => a.actorRole === f.role);
+  if (f.doctor !== "All") list = list.filter((a) => a.actorName === f.doctor);
+  if (f.severity !== "All")
+    list = list.filter((a) => a.severity === f.severity);
+  if (f.status !== "All") list = list.filter((a) => a.status === f.status);
+  if (f.dateFrom) {
+    const fromMs = new Date(f.dateFrom + "T00:00:00").getTime();
+    list = list.filter((a) => a.timestamp >= fromMs);
   }
-  if (activityFilters.doctor !== "All") {
-    filtered = filtered.filter((a) => a.doctorName === activityFilters.doctor);
+  if (f.dateTo) {
+    const toMs = new Date(f.dateTo + "T23:59:59").getTime();
+    list = list.filter((a) => a.timestamp <= toMs);
   }
-  if (activityFilters.status !== "All") {
-    filtered = filtered.filter((a) => a.status === activityFilters.status);
-  }
-  if (activityFilters.dateFrom) {
-    const fromMs = new Date(activityFilters.dateFrom + "T00:00:00").getTime();
-    filtered = filtered.filter((a) => a.timestamp >= fromMs);
-  }
-  if (activityFilters.dateTo) {
-    const toMs = new Date(activityFilters.dateTo + "T23:59:59").getTime();
-    filtered = filtered.filter((a) => a.timestamp <= toMs);
-  }
-  if (activityFilters.search) {
-    const term = activityFilters.search;
-    filtered = filtered.filter(
-      (a) =>
-        a.doctorName.toLowerCase().includes(term) ||
-        a.description.toLowerCase().includes(term),
+  if (f.search) {
+    const term = f.search;
+    list = list.filter((a) =>
+      [a.actorName, a.description, a.patientCode, a.targetName, a.activityType]
+        .join(" ")
+        .toLowerCase()
+        .includes(term),
     );
   }
+  return list.sort((a, b) => b.timestamp - a.timestamp);
+}
 
-  filtered.sort((a, b) => b.timestamp - a.timestamp);
+function renderActivityStats() {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
-  // Summary cards always reflect the full dataset, not the filtered view
-  statTotal.textContent = allActivities.length;
-  statActiveDoctors.textContent = new Set(
-    allActivities.map((a) => a.doctorUid),
+  statToday.textContent = allActivities.filter(
+    (a) => a.timestamp >= startOfToday.getTime(),
+  ).length;
+  statAttention.textContent = allActivities.filter(
+    (a) => a.severity !== "info" && a.timestamp >= weekAgo,
+  ).length;
+  statActiveUsers.textContent = new Set(
+    allActivities
+      .filter((a) => a.timestamp >= weekAgo && a.actorUid)
+      .map((a) => a.actorUid),
   ).size;
-  statConsultations.textContent = allActivities.filter(
-    (a) => a.category === "Consultation",
-  ).length;
-  statMedSafety.textContent = allActivities.filter(
-    (a) => a.category === "Medication Safety Review",
-  ).length;
+}
 
+function renderActivityView() {
+  renderActivityStats();
+
+  const filtered = getFilteredActivities();
   activityTableBody.innerHTML = "";
 
   if (filtered.length === 0) {
+    const hasFilters =
+      JSON.stringify(activityFilters) !==
+      JSON.stringify(DEFAULT_ACTIVITY_FILTERS);
     const tr = document.createElement("tr");
     const td = document.createElement("td");
     td.colSpan = 7;
     td.innerHTML = `
       <div class="empty-state-cell">
-        <div class="icon">📋</div>
-        <h3>No activity yet</h3>
-        <p>Doctor actions will appear here as they happen.</p>
+        <div class="icon">${hasFilters ? "🔍" : "📋"}</div>
+        <h3>${hasFilters ? "No matching activity" : "No activity yet"}</h3>
+        <p>${hasFilters ? "Try clearing some filters." : "Actions by doctors, patients, caregivers and admins will appear here."}</p>
       </div>
     `;
     tr.appendChild(td);
     activityTableBody.appendChild(tr);
+    activityLoadMore.style.display = "none";
     return;
   }
 
-  filtered.forEach((a) => activityTableBody.appendChild(buildActivityRow(a)));
+  filtered
+    .slice(0, activityVisibleLimit)
+    .forEach((a) => activityTableBody.appendChild(buildActivityRow(a)));
+
+  activityLoadMore.style.display =
+    filtered.length > activityVisibleLimit ? "block" : "none";
+  activityLoadMoreBtn.textContent = `Show more (${filtered.length - activityVisibleLimit} left)`;
 }
 
-function buildActivityRow(a) {
-  const tr = document.createElement("tr");
-  tr.className = "doctor-row";
-
-  const dateStr = a.timestamp
-    ? new Date(a.timestamp).toLocaleString(undefined, {
+function formatActivityDate(ts) {
+  return ts
+    ? new Date(ts).toLocaleString(undefined, {
         month: "short",
         day: "numeric",
         year: "numeric",
@@ -478,34 +580,75 @@ function buildActivityRow(a) {
         minute: "2-digit",
       })
     : "—";
+}
+
+function buildActivityRow(a) {
+  const tr = document.createElement("tr");
+  tr.className = "doctor-row";
 
   tr.innerHTML = `
-    <td>${escapeHtml(a.doctorName)}</td>
+    <td class="actor-cell">
+      <div class="actor-name">${escapeHtml(a.actorName)}</div>
+      <div class="actor-role">${escapeHtml(a.actorRole || "—")}</div>
+    </td>
     <td>${escapeHtml(a.description)}</td>
     <td>${escapeHtml(a.category)}</td>
-    <td>${escapeHtml(a.patientCode || "—")}</td>
-    <td class="doctor-row-date">${dateStr}</td>
+    <td class="actor-cell">
+      <div class="actor-name">${escapeHtml(a.targetName || a.patientCode || "—")}</div>
+      ${a.targetName && a.patientCode ? `<div class="actor-role" style="text-transform:none">${escapeHtml(a.patientCode)}</div>` : ""}
+    </td>
+    <td class="doctor-row-date">${formatActivityDate(a.timestamp)}</td>
     <td>${a.status ? `<span class="badge ${getStatusBadgeClass(a.status)}">${escapeHtml(a.status)}</span>` : "—"}</td>
-    <td><button type="button" class="btn-logout" style="padding:6px 10px;font-size:12px;">View</button></td>
+    <td><span class="badge sev-${escapeHtml(a.severity)}">${escapeHtml(a.severity)}</span></td>
   `;
-  tr.querySelector("button").addEventListener("click", () =>
-    openActivityDetail(a),
-  );
+  tr.addEventListener("click", () => openActivityDetail(a));
   return tr;
+}
+
+function detailRow(label, value, mono) {
+  return `<div class="claim-row"><div class="k">${escapeHtml(label)}</div><div class="v${mono ? " mono" : ""}">${escapeHtml(value || "—")}</div></div>`;
 }
 
 function openActivityDetail(a) {
   activityDetailTitle.textContent = a.description;
-  const dateStr = a.timestamp ? new Date(a.timestamp).toLocaleString() : "—";
-  activityDetailRows.innerHTML = `
-    <div class="claim-row"><div class="k">Doctor</div><div class="v">${escapeHtml(a.doctorName)}</div></div>
-    <div class="claim-row"><div class="k">Category</div><div class="v">${escapeHtml(a.category)}</div></div>
-    <div class="claim-row"><div class="k">Activity type</div><div class="v mono">${escapeHtml(a.activityType || "—")}</div></div>
-    <div class="claim-row"><div class="k">Patient</div><div class="v">${escapeHtml(a.patientCode || "—")}</div></div>
-    <div class="claim-row"><div class="k">Date &amp; time</div><div class="v">${escapeHtml(dateStr)}</div></div>
-    <div class="claim-row"><div class="k">Status</div><div class="v">${escapeHtml(a.status || "—")}</div></div>
-    <div class="claim-row"><div class="k">Related record</div><div class="v mono">${escapeHtml(a.relatedRecordId || "—")}</div></div>
-  `;
+  const when = a.timestamp
+    ? `${new Date(a.timestamp).toLocaleString()} (${new Date(a.timestamp).toISOString()})`
+    : "—";
+
+  activityDetailRows.innerHTML =
+    detailRow("Who", a.actorName) +
+    detailRow("Role", a.actorRole) +
+    detailRow("Category", a.category) +
+    detailRow("Severity", a.severity) +
+    detailRow("Activity type", a.activityType, true) +
+    detailRow("Status", a.status) +
+    detailRow("Patient code", a.patientCode, true) +
+    detailRow("Target", a.targetName) +
+    detailRow("Related record", a.relatedRecordId, true) +
+    detailRow("Actor ID", a.actorUid, true) +
+    detailRow(
+      "Source",
+      [a.platform, a.appVersion].filter(Boolean).join(" · "),
+    ) +
+    detailRow("When", when);
+
+  const entries = a.changes ? Object.entries(a.changes) : [];
+  activityChangesBlock.style.display = entries.length ? "block" : "none";
+  activityChanges.innerHTML = entries
+    .map(([field, v]) => {
+      const from = v && typeof v === "object" ? v.from : "";
+      const to = v && typeof v === "object" ? v.to : v;
+      return `<div class="change-row">
+        <div class="field">${escapeHtml(field)}</div>
+        <div class="from">${escapeHtml(String(from ?? "—"))}</div>
+        <div class="to">${escapeHtml(String(to ?? "—"))}</div>
+      </div>`;
+    })
+    .join("");
+
+  activityReasonBlock.style.display = a.reason ? "block" : "none";
+  activityReason.textContent = a.reason || "";
+
   overlay.classList.add("visible");
   activityDetailPanel.classList.add("visible");
 }
@@ -516,29 +659,112 @@ function closeActivityDetail() {
 
 activityDetailClose.addEventListener("click", closeActivityDetail);
 
-activityCategoryFilter.addEventListener("change", () => {
-  activityFilters.category = activityCategoryFilter.value;
-  renderActivityView();
-});
-activityDoctorFilter.addEventListener("change", () => {
-  activityFilters.doctor = activityDoctorFilter.value;
-  renderActivityView();
-});
-activityStatusFilter.addEventListener("change", () => {
-  activityFilters.status = activityStatusFilter.value;
-  renderActivityView();
-});
-activityDateFrom.addEventListener("change", () => {
-  activityFilters.dateFrom = activityDateFrom.value;
-  renderActivityView();
-});
-activityDateTo.addEventListener("change", () => {
-  activityFilters.dateTo = activityDateTo.value;
-  renderActivityView();
-});
+// ── Activity filters ────────────────────────────────────────────────
+function bindFilter(el, key, event = "change") {
+  el.addEventListener(event, () => {
+    activityFilters[key] = el.value;
+    activityVisibleLimit = ACTIVITY_PAGE_SIZE;
+    renderActivityView();
+  });
+}
+bindFilter(activityCategoryFilter, "category");
+bindFilter(activityRoleFilter, "role");
+bindFilter(activityDoctorFilter, "doctor");
+bindFilter(activitySeverityFilter, "severity");
+bindFilter(activityStatusFilter, "status");
+bindFilter(activityDateFrom, "dateFrom");
+bindFilter(activityDateTo, "dateTo");
 activitySearchInput.addEventListener("input", () => {
   activityFilters.search = activitySearchInput.value.trim().toLowerCase();
+  activityVisibleLimit = ACTIVITY_PAGE_SIZE;
   renderActivityView();
+});
+
+activityClearBtn.addEventListener("click", () => {
+  activityFilters = { ...DEFAULT_ACTIVITY_FILTERS };
+  activityVisibleLimit = ACTIVITY_PAGE_SIZE;
+  activitySearchInput.value = "";
+  activityCategoryFilter.value = "All";
+  activityRoleFilter.value = "All";
+  activitySeverityFilter.value = "All";
+  activityDateFrom.value = "";
+  activityDateTo.value = "";
+  renderActivityFilterOptions();
+  renderActivityView();
+});
+
+activityLoadMoreBtn.addEventListener("click", () => {
+  activityVisibleLimit += ACTIVITY_PAGE_SIZE;
+  renderActivityView();
+});
+
+// ── Export CSV (respects the current filters) ───────────────────────
+function csvCell(value) {
+  let s = value === undefined || value === null ? "" : String(value);
+  // Stop spreadsheet apps from running cells that start like a formula
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+activityExportBtn.addEventListener("click", () => {
+  const rows = getFilteredActivities();
+  if (rows.length === 0) {
+    showToast("Nothing to export with the current filters.", true);
+    return;
+  }
+  const header = [
+    "Time (ISO)",
+    "Who",
+    "Role",
+    "Activity type",
+    "Description",
+    "Category",
+    "Severity",
+    "Status",
+    "Patient code",
+    "Target",
+    "Reason",
+    "Actor ID",
+  ];
+  const lines = [header.map(csvCell).join(",")];
+  rows.forEach((a) =>
+    lines.push(
+      [
+        a.timestamp ? new Date(a.timestamp).toISOString() : "",
+        a.actorName,
+        a.actorRole,
+        a.activityType,
+        a.description,
+        a.category,
+        a.severity,
+        a.status,
+        a.patientCode,
+        a.targetName,
+        a.reason,
+        a.actorUid,
+      ]
+        .map(csvCell)
+        .join(","),
+    ),
+  );
+  const blob = new Blob(["﻿" + lines.join("\r\n")], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `medcheck-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  writeAuditLog({
+    activityType: "ADMIN_EXPORTED_LOGS",
+    category: "Data Access",
+    description: `Admin exported ${rows.length} activity log entries`,
+    status: "Exported",
+  });
 });
 
 // ── Verification view: status tabs / search ─────────────────────────
@@ -564,6 +790,7 @@ function renderVerificationView() {
   document.getElementById("count-pending").textContent = counts.Pending || 0;
   document.getElementById("count-verified").textContent = counts.Verified || 0;
   document.getElementById("count-rejected").textContent = counts.Rejected || 0;
+  statPending.textContent = counts.Pending || 0;
 
   let filtered = allDoctors.filter(
     (d) => d.verificationStatus === activeStatusTab,
@@ -728,6 +955,19 @@ function buildRow(d) {
 // ── Review panel ─────────────────────────────────────────────────────
 function openReviewPanel(d, fromRefresh) {
   activeReviewUid = d.uid;
+
+  // Viewing a doctor's ID documents is sensitive data access — record it
+  // once per opening (not on live refreshes of an already-open panel).
+  if (!fromRefresh) {
+    writeAuditLog({
+      activityType: "ADMIN_VIEWED_DOCUMENTS",
+      category: "Data Access",
+      description: `Opened verification documents of ${d.name}`,
+      status: "Viewed",
+      targetUid: d.uid,
+      targetName: d.name,
+    });
+  }
 
   reviewNameEl.textContent = d.name;
   claimName.textContent = d.name;
@@ -964,7 +1204,27 @@ async function submitDecision(status, reason) {
   };
 
   try {
+    const before = allDoctors.find((x) => x.uid === uid);
     await update(ref(db, uid), payload);
+    await writeAuditLog({
+      activityType:
+        status === "Verified"
+          ? "ADMIN_DOCTOR_APPROVED"
+          : "ADMIN_DOCTOR_REJECTED",
+      category: "Admin Action",
+      description: `${status === "Verified" ? "Approved" : "Rejected"} ${before?.name || "doctor"}`,
+      status: status === "Verified" ? "Approved" : "Rejected",
+      severity: status === "Verified" ? "info" : "warning",
+      targetUid: uid,
+      targetName: before?.name || "",
+      reason,
+      changes: {
+        verificationStatus: {
+          from: before?.verificationStatus || "—",
+          to: status,
+        },
+      },
+    });
     showToast(
       status === "Verified"
         ? "Doctor approved."
@@ -1006,6 +1266,18 @@ async function submitMoveToPending() {
 
   try {
     await update(ref(db, uid), payload);
+    await writeAuditLog({
+      activityType: "ADMIN_MOVED_TO_PENDING",
+      category: "Admin Action",
+      description: `Moved ${doctor.name} back to Pending`,
+      status: "Pending",
+      severity: "warning",
+      targetUid: uid,
+      targetName: doctor.name,
+      changes: {
+        verificationStatus: { from: doctor.verificationStatus, to: "Pending" },
+      },
+    });
     showToast("Doctor moved back to Pending for re-review.");
     closeReviewPanel();
   } catch (err) {
