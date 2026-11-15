@@ -10,68 +10,489 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="css/style.css" />
+    <style>
+      .topbar #account-label {
+        color: #6b7280;
+      }
+      .topbar .btn-logout {
+        background: #f3f4f6;
+        color: #111827;
+        border: 1px solid #e5e7eb;
+      }
+      .topbar .btn-logout:hover {
+        background: #e5e7eb;
+      }
+      .main-area .page {
+        max-width: none;
+        margin: 0;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 28px 32px;
+      }
+      .sidebar-brand .mark {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: #111827;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 13px;
+        flex-shrink: 0;
+      }
+      .sidebar-brand .title {
+        font-weight: 700;
+        font-size: 15px;
+        color: #111827;
+        line-height: 1.2;
+      }
+      .sidebar-brand .title span {
+        display: block;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #9ca3af;
+        margin-top: 2px;
+      }
+      .spec-filter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .spec-filter label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+      }
+      .spec-filter select {
+        padding: 8px 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        color: #111827;
+        background: #fff;
+      }
+
+      /* ── New sidebar layout (scoped here, doesn't touch style.css) ── */
+      .app-shell {
+        display: flex;
+        min-height: 100vh;
+        align-items: stretch;
+      }
+      .sidebar {
+        width: 240px;
+        flex-shrink: 0;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 20px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .sidebar-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 12px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        text-align: left;
+        padding: 14px 14px; /* was 10px 12px */
+        min-height: 48px; /* new — makes each item visibly taller */
+        border: none;
+        background: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #4b5563;
+        cursor: pointer;
+      }
+      .nav-item:hover {
+        background: #f3f4f6;
+      }
+      .nav-item.active {
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-weight: 600;
+      }
+      .nav-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .nav-icon svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor; /* so it recolors automatically when .active */
+      }
+      .main-area {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .topbar {
+        background: #fff !important;
+        border-bottom: 1px solid #e5e7eb;
+        justify-content: flex-end !important;
+      }
+
+      /* ── Table (doctor directory + verification queue share this) ── */
+      .table-wrap {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .doctor-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      .doctor-table thead th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #6b7280;
+        font-weight: 600;
+        padding: 12px 20px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .doctor-table tbody tr.doctor-row {
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.12s ease;
+      }
+      .doctor-table tbody tr.doctor-row:last-child {
+        border-bottom: none;
+      }
+      .doctor-table tbody tr.doctor-row:hover {
+        background: #f9fafb;
+      }
+      .doctor-table td {
+        padding: 14px 20px;
+        vertical-align: middle;
+        color: #111827;
+      }
+      .doctor-row-user {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 13px;
+        flex-shrink: 0;
+      }
+      .doctor-row-name {
+        font-weight: 600;
+      }
+      .doctor-row-sub {
+        font-size: 12.5px;
+        color: #6b7280;
+        margin-top: 2px;
+      }
+      .doctor-row-contact > div:first-child {
+        color: #111827;
+      }
+      .doctor-row-date {
+        color: #6b7280;
+      }
+      .empty-state-cell {
+        text-align: center;
+        padding: 48px 20px;
+      }
+      .empty-state-cell .icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+      }
+      .empty-state-cell h3 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        color: #111827;
+      }
+      .empty-state-cell p {
+        margin: 0;
+        font-size: 13.5px;
+        color: #6b7280;
+      }
+    </style>
   </head>
   <body>
-    <div class="topbar">
-      <div class="topbar-brand">
-        <div class="mark">MC</div>
-        <div class="title">MedCheck<span>Admin Portal</span></div>
-      </div>
-      <div class="topbar-account">
-        <span id="account-label"></span>
-        <a
-          href="addAdmin.html"
-          class="btn-logout"
-          style="text-decoration: none; margin-right: 8px"
-          >+ Add Admin</a
-        >
-        <button class="btn-logout" id="logout-btn">Sign out</button>
-      </div>
-    </div>
-
-    <div class="page">
-      <div class="page-header">
-        <div>
-          <h2>Doctor verification</h2>
-          <p>
-            Review submitted PRC licenses before doctors get full account
-            access.
-          </p>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="mark">MC</div>
+          <div class="title">MedCheck<span>Admin Portal</span></div>
         </div>
-        <input
-          type="text"
-          id="search-input"
-          class="search-input"
-          placeholder="Search name, license, email…"
-        />
-      </div>
+        <nav class="sidebar-nav">
+          <button class="nav-item active" data-view="verification">
+            <span class="nav-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </span>
+            Verification
+          </button>
+          <button class="nav-item" data-view="doctors">
+            <span class="nav-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M8 2v2.5a2.5 2.5 0 0 1-2.5 2.5 2.5 2.5 0 0 1-2.5-2.5V2"
+                />
+                <path
+                  d="M8 2v2.5A2.5 2.5 0 0 0 10.5 7a2.5 2.5 0 0 0 2.5-2.5V2"
+                />
+                <path d="M5.5 7v8a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-1.5" />
+                <circle cx="20" cy="10" r="2" />
+              </svg>
+            </span>
+            Doctors
+          </button>
+          <button class="nav-item" data-view="activity">
+            <span class="nav-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <path
+                  d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                />
+                <path d="M12 11h4" />
+                <path d="M12 16h4" />
+                <path d="M8 11h.01" />
+                <path d="M8 16h.01" />
+              </svg>
+            </span>
+            Activity Logs
+          </button>
+        </nav>
+      </aside>
 
-      <div class="tabs">
-        <button class="tab active" data-status="Pending">
-          Pending <span class="count" id="count-pending">0</span>
-        </button>
-        <button class="tab" data-status="Verified">
-          Verified <span class="count" id="count-verified">0</span>
-        </button>
-        <button class="tab" data-status="Rejected">
-          Rejected <span class="count" id="count-rejected">0</span>
-        </button>
-      </div>
+      <div class="main-area">
+        <div class="topbar">
+          <div class="topbar-account">
+            <span id="account-label"></span>
+            <a
+              href="addAdmin.html"
+              class="btn-logout"
+              style="text-decoration: none; margin-right: 8px"
+              >+ Add Admin</a
+            >
+            <button class="btn-logout" id="logout-btn">Sign out</button>
+          </div>
+        </div>
 
-      <div class="loading-row" id="loading-row">Loading doctors…</div>
+        <!-- ═══ View: Verification queue ═══ -->
+        <div class="page" id="view-verification">
+          <div class="page-header">
+            <div>
+              <h2>Doctor verification</h2>
+              <p>
+                Review submitted PRC licenses before doctors get full account
+                access.
+              </p>
+            </div>
+            <input
+              type="text"
+              id="verify-search-input"
+              class="search-input"
+              placeholder="Search name, license, email…"
+            />
+          </div>
 
-      <div class="card-grid" id="card-grid"></div>
+          <div class="tabs" id="status-tabs">
+            <button class="tab active" data-status="Pending">
+              Pending <span class="count" id="count-pending">0</span>
+            </button>
+            <button class="tab" data-status="Verified">
+              Verified <span class="count" id="count-verified">0</span>
+            </button>
+            <button class="tab" data-status="Rejected">
+              Rejected <span class="count" id="count-rejected">0</span>
+            </button>
+          </div>
 
-      <div class="empty-state" id="empty-state" style="display: none">
-        <div class="icon" id="empty-icon">✅</div>
-        <h3 id="empty-title">Nothing waiting on you</h3>
-        <p id="empty-desc">
-          New doctor registrations will appear here for review.
-        </p>
+          <div class="loading-row" id="loading-row">Loading doctors…</div>
+
+          <div class="table-wrap">
+            <table class="doctor-table">
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Contact</th>
+                  <th>Specialization</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
+                </tr>
+              </thead>
+              <tbody id="verification-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ═══ View: Doctors directory ═══ -->
+        <div class="page" id="view-doctors" style="display: none">
+          <div class="page-header">
+            <div>
+              <h2>Doctors</h2>
+              <p>All registered doctors, browsable by specialization.</p>
+            </div>
+            <input
+              type="text"
+              id="doctors-search-input"
+              class="search-input"
+              placeholder="Search name, license, email…"
+            />
+          </div>
+
+          <div class="spec-filter">
+            <label for="specialization-select">Specialization</label>
+            <select id="specialization-select">
+              <option value="All">All</option>
+            </select>
+          </div>
+
+          <div class="table-wrap">
+            <table class="doctor-table">
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Contact</th>
+                  <th>Specialization</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
+                </tr>
+              </thead>
+              <tbody id="doctors-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <!-- ═══ View: Activity logs ═══ -->
+        <div class="page" id="view-activity" style="display: none">
+          <div class="page-header">
+            <div>
+              <h2>Activity logs</h2>
+              <p>
+                Consultations, medication changes, patient connections, and
+                account activity across all doctors.
+              </p>
+            </div>
+            <input
+              type="text"
+              id="activity-search-input"
+              class="search-input"
+              placeholder="Search doctor or activity…"
+            />
+          </div>
+
+          <div class="stat-cards">
+            <div class="stat-card">
+              <div class="stat-card-label">Total activities</div>
+              <div class="stat-card-value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-label">Active doctors</div>
+              <div class="stat-card-value" id="stat-active-doctors">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-label">Consultations</div>
+              <div class="stat-card-value" id="stat-consultations">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-label">Medication safety reviews</div>
+              <div class="stat-card-value" id="stat-med-safety">0</div>
+            </div>
+          </div>
+
+          <div class="activity-filters">
+            <select id="activity-category-filter">
+              <option value="All">All categories</option>
+              <option value="Consultation">Consultation</option>
+              <option value="Medication Safety">Medication Safety</option>
+              <option value="Medication Management">
+                Medication Management
+              </option>
+              <option value="Patient Connection">Patient Connection</option>
+              <option value="Account">Account &amp; Profile</option>
+            </select>
+            <select id="activity-doctor-filter">
+              <option value="All">All doctors</option>
+            </select>
+            <select id="activity-status-filter">
+              <option value="All">All statuses</option>
+            </select>
+            <div class="date-range">
+              <input
+                type="date"
+                id="activity-date-from"
+                aria-label="From date"
+              />
+              <span class="filter-sep">to</span>
+              <input type="date" id="activity-date-to" aria-label="To date" />
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="doctor-table">
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Activity</th>
+                  <th>Category</th>
+                  <th>Patient</th>
+                  <th>Date &amp; time</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="activity-table-body"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- ═══ Review panel ═══ -->
+    <!-- ═══ Review panel (shared by both views) ═══ -->
     <div class="overlay" id="overlay"></div>
     <div class="review-panel" id="review-panel">
       <div class="review-header">
@@ -96,7 +517,7 @@
           ↗ Open PRC's official license verification portal
         </a>
 
-        <!-- Claim (what the doctor typed) vs Evidence (what they uploaded) -->
+        <!-- Claim (what the doctor typed) -->
         <div class="claim-evidence">
           <div class="claim-block">
             <div class="block-label">Claimed details</div>
@@ -106,12 +527,24 @@
                 <div class="v" id="claim-name">—</div>
               </div>
               <div class="claim-row">
+                <div class="k">Professional title</div>
+                <div class="v" id="claim-title">—</div>
+              </div>
+              <div class="claim-row">
                 <div class="k">PRC license number</div>
                 <div class="v mono" id="claim-license">—</div>
               </div>
               <div class="claim-row">
                 <div class="k">Specialization</div>
                 <div class="v" id="claim-specialization">—</div>
+              </div>
+              <div class="claim-row">
+                <div class="k">Years of experience</div>
+                <div class="v" id="claim-experience">—</div>
+              </div>
+              <div class="claim-row">
+                <div class="k">Clinic / hospital affiliation</div>
+                <div class="v" id="claim-clinic">—</div>
               </div>
               <div class="claim-row">
                 <div class="k">Phone</div>
@@ -124,16 +557,10 @@
             </div>
           </div>
 
-          <div class="evidence-block">
-            <div class="block-label">Submitted PRC ID — Front</div>
-            <img id="evidence-img" src="" alt="PRC ID front" />
-
-            <div id="evidence-back-section" style="display: none">
-              <div class="block-label" style="margin-top: 16px">
-                Submitted PRC ID — Back
-              </div>
-              <img id="evidence-back-img" src="" alt="PRC ID back" />
-            </div>
+          <!-- Submitted documents — thumbnail grid, click any tile to zoom -->
+          <div class="documents-block">
+            <div class="block-label">Submitted documents</div>
+            <div class="doc-grid" id="doc-grid"></div>
           </div>
         </div>
 
@@ -161,12 +588,64 @@
           Confirm reject
         </button>
         <button class="btn-approve" id="btn-approve">Approve doctor</button>
+        <button class="btn-cancel" id="btn-move-pending" style="display: none">
+          Move to Pending
+        </button>
+      </div>
+    </div>
+    <!-- ═══ Activity detail panel ═══ -->
+    <div class="review-panel" id="activity-detail-panel">
+      <div class="review-header">
+        <h3 id="activity-detail-title">Activity</h3>
+        <button class="btn-close" id="activity-detail-close">✕</button>
+      </div>
+      <div class="review-body">
+        <div class="claim-block">
+          <div class="block-label">Details</div>
+          <div class="claim-rows" id="activity-detail-rows"></div>
+        </div>
       </div>
     </div>
 
-    <!-- ═══ Lightbox for full-size PRC ID ═══ -->
+    <div class="confirm-modal" id="logout-confirm-modal">
+      <div class="confirm-modal-icon">⎋</div>
+      <h3>Sign out of the admin portal?</h3>
+      <p>You'll need to sign in again to continue reviewing doctors.</p>
+      <div class="confirm-modal-actions">
+        <button class="btn-cancel" id="logout-cancel-btn" type="button">
+          Cancel
+        </button>
+        <button
+          class="btn-reject-confirm"
+          id="logout-confirm-btn"
+          type="button"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ Document lightbox — zoom + step through all submitted docs ═══ -->
     <div class="lightbox" id="lightbox">
-      <img id="lightbox-img" src="" alt="PRC ID full size" />
+      <button class="lightbox-close" id="lightbox-close" aria-label="Close">
+        ✕
+      </button>
+      <button
+        class="lightbox-nav lightbox-prev"
+        id="lightbox-prev"
+        aria-label="Previous document"
+      >
+        ‹
+      </button>
+      <img id="lightbox-img" src="" alt="" />
+      <button
+        class="lightbox-nav lightbox-next"
+        id="lightbox-next"
+        aria-label="Next document"
+      >
+        ›
+      </button>
+      <div class="lightbox-caption" id="lightbox-caption"></div>
     </div>
 
     <div class="toast" id="toast"></div>
