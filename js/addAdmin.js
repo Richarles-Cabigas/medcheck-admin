@@ -14,6 +14,8 @@ import {
   ref,
   get,
   set,
+  push,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { firebaseConfig } from "./firebase-init.js";
 
@@ -22,6 +24,11 @@ const auth = getAuth(app);
 const db = getDatabase(app);
 
 const API_KEY = "AIzaSyDU6v_OifaRnqhN9yr1zR0MQIvXRIkGoTs";
+
+// Captured once the current session is confirmed as admin — used to
+// stamp "created by" on both the new admin's profile and the audit log.
+let currentAdminUid = null;
+let currentAdminEmail = null;
 
 // ── DOM refs ─────────────────────────────────────────────────────────
 const newAdminEmail = document.getElementById("new-admin-email");
@@ -45,6 +52,9 @@ onAuthStateChanged(auth, async (user) => {
     window.location.href = "index.html";
     return;
   }
+
+  currentAdminUid = user.uid;
+  currentAdminEmail = user.email;
   // Signed in AND confirmed admin — page is now usable.
 });
 
@@ -52,6 +62,28 @@ if (backLink) {
   backLink.addEventListener("click", () => {
     window.location.href = "dashboard.html";
   });
+}
+
+// A failed log must never block the admin's real action.
+async function logAdminCreated(newUid, newEmail) {
+  try {
+    await push(ref(db, "activityLogs"), {
+      actorUid: currentAdminUid,
+      actorName: currentAdminEmail || "Admin",
+      actorRole: "admin",
+      activityType: "ADMIN_CREATED",
+      category: "Admin Action",
+      description: `Created new admin account for ${newEmail}`,
+      status: "Created",
+      severity: "warning",
+      targetUid: newUid,
+      targetName: newEmail,
+      timestamp: serverTimestamp(),
+      platform: "web-admin",
+    });
+  } catch (err) {
+    console.error("Couldn't write ADMIN_CREATED audit log:", err);
+  }
 }
 
 // ── Create admin ─────────────────────────────────────────────────────
@@ -103,6 +135,19 @@ addAdminSubmit.addEventListener("click", async () => {
     // session (auth.currentUser here is YOU, not the new account) —
     // this is what the rules check to authorize the write.
     await set(ref(db, `admins/${newUid}`), true);
+
+    // Step 3: record who this admin is and who created them, so the
+    // Admins screen in the dashboard can show more than a bare UID.
+    await set(ref(db, `adminProfiles/${newUid}`), {
+      email,
+      createdAt: Date.now(),
+      createdByUid: currentAdminUid,
+      createdByEmail: currentAdminEmail || "",
+    });
+
+    // Step 4: audit log — this is the kind of action that should always
+    // leave a trail, not optionally.
+    await logAdminCreated(newUid, email);
 
     newAdminEmail.value = "";
     newAdminPassword.value = "";

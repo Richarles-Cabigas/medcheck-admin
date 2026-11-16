@@ -78,7 +78,7 @@
         background: #fff;
       }
 
-      /* ── New sidebar layout (scoped here, doesn't touch style.css) ── */
+      /* ── Sidebar layout ── */
       .app-shell {
         display: flex;
         min-height: 100vh;
@@ -111,8 +111,8 @@
         gap: 10px;
         width: 100%;
         text-align: left;
-        padding: 14px 14px; /* was 10px 12px */
-        min-height: 48px; /* new — makes each item visibly taller */
+        padding: 14px 14px;
+        min-height: 48px;
         border: none;
         background: none;
         border-radius: 8px;
@@ -138,7 +138,7 @@
       .nav-icon svg {
         width: 18px;
         height: 18px;
-        stroke: currentColor; /* so it recolors automatically when .active */
+        stroke: currentColor;
       }
       .main-area {
         flex: 1;
@@ -152,7 +152,7 @@
         justify-content: flex-end !important;
       }
 
-      /* ── Table (doctor directory + verification queue share this) ── */
+      /* ── Tables (doctor directory + verification queue + activity + admins) ── */
       .table-wrap {
         background: #fff;
         border: 1px solid #e5e7eb;
@@ -161,8 +161,68 @@
       }
       .doctor-table {
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
         font-size: 14px;
+      }
+      .doctor-table td {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+      /* ── Activity logs: single-row list (replaces the old table) ── */
+      .activity-list {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .activity-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 16px 20px;
+        border-bottom: 1px solid #f1f5f9;
+        cursor: pointer;
+      }
+      .activity-row:last-child {
+        border-bottom: none;
+      }
+      .activity-row:hover {
+        background: #f9fafb;
+      }
+      .activity-row-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 12.5px;
+      }
+      .activity-row-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .activity-row-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .activity-row-sub {
+        font-size: 12.5px;
+        color: #6b7280;
+        margin-top: 3px;
+      }
+      .activity-row-time {
+        font-size: 11.5px;
+        color: #9ca3af;
+        margin-top: 5px;
+      }
+      .activity-row-badge {
+        flex-shrink: 0;
+        margin-left: 10px;
       }
       .doctor-table thead th {
         text-align: left;
@@ -175,13 +235,15 @@
         background: #f9fafb;
         border-bottom: 1px solid #e5e7eb;
       }
-      .doctor-table tbody tr.doctor-row {
-        cursor: pointer;
+      .doctor-table tbody tr {
         border-bottom: 1px solid #f1f5f9;
         transition: background 0.12s ease;
       }
-      .doctor-table tbody tr.doctor-row:last-child {
+      .doctor-table tbody tr:last-child {
         border-bottom: none;
+      }
+      .doctor-table tbody tr.doctor-row {
+        cursor: pointer;
       }
       .doctor-table tbody tr.doctor-row:hover {
         background: #f9fafb;
@@ -221,6 +283,16 @@
       .doctor-row-date {
         color: #6b7280;
       }
+      .actor-cell .actor-name {
+        font-weight: 600;
+        color: #111827;
+      }
+      .actor-cell .actor-role {
+        font-size: 11.5px;
+        color: #6b7280;
+        text-transform: capitalize;
+        margin-top: 2px;
+      }
       .empty-state-cell {
         text-align: center;
         padding: 48px 20px;
@@ -238,6 +310,108 @@
         margin: 0;
         font-size: 13.5px;
         color: #6b7280;
+      }
+      .badge.suspended {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      /* ── Activity toolbar: Clear / Export, right-aligned above the table ── */
+      .activity-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .btn-outline,
+      .btn-solid-sm {
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 8px;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-outline {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        color: #374151;
+      }
+      .btn-outline:hover {
+        background: #f3f4f6;
+      }
+      .btn-solid-sm {
+        background: #0f172a;
+        border: 1px solid #0f172a;
+        color: #fff;
+      }
+      .btn-solid-sm:hover {
+        background: #1e293b;
+      }
+
+      /* ── Load more ── */
+      .activity-load-more {
+        text-align: center;
+        margin-top: 14px;
+      }
+      .btn-load-more {
+        height: 40px;
+        padding: 0 18px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #374151;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-load-more:hover {
+        background: #f3f4f6;
+      }
+
+      /* ── Severity badges ── */
+      .badge.sev-info {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+      .badge.sev-warning {
+        background: #fffbeb;
+        color: #92400e;
+      }
+
+      /* ── Changes diff (field → from → to) in the activity detail panel ── */
+      .changes-table {
+        padding: 4px 14px 10px;
+      }
+      .change-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 12.5px;
+      }
+      .change-row:last-child {
+        border-bottom: none;
+      }
+      .change-row .field {
+        font-weight: 700;
+        color: #111827;
+        text-transform: capitalize;
+      }
+      .change-row .from {
+        color: #991b1b;
+        text-decoration: line-through;
+      }
+      .change-row .to {
+        color: #166534;
+        font-weight: 600;
+      }
+      .reason-text {
+        padding: 10px 14px;
+        font-size: 13px;
+        color: #374151;
+        line-height: 1.5;
       }
     </style>
   </head>
@@ -312,12 +486,6 @@
         <div class="topbar">
           <div class="topbar-account">
             <span id="account-label"></span>
-            <a
-              href="addAdmin.html"
-              class="btn-logout"
-              style="text-decoration: none; margin-right: 8px"
-              >+ Add Admin</a
-            >
             <button class="btn-logout" id="logout-btn">Sign out</button>
           </div>
         </div>
@@ -407,94 +575,40 @@
             </table>
           </div>
         </div>
+
         <!-- ═══ View: Activity logs ═══ -->
         <div class="page" id="view-activity" style="display: none">
           <div class="page-header">
             <div>
               <h2>Activity logs</h2>
-              <p>
-                Consultations, medication changes, patient connections, and
-                account activity across all doctors.
-              </p>
+              <p>Every action: who did it, what changed, and when.</p>
             </div>
             <input
               type="text"
               id="activity-search-input"
               class="search-input"
-              placeholder="Search doctor or activity…"
+              placeholder="Search user, activity, patient…"
             />
           </div>
 
-          <div class="stat-cards">
-            <div class="stat-card">
-              <div class="stat-card-label">Total activities</div>
-              <div class="stat-card-value" id="stat-total">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-card-label">Active doctors</div>
-              <div class="stat-card-value" id="stat-active-doctors">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-card-label">Consultations</div>
-              <div class="stat-card-value" id="stat-consultations">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-card-label">Medication safety reviews</div>
-              <div class="stat-card-value" id="stat-med-safety">0</div>
-            </div>
-          </div>
+          <div class="tabs" id="activity-category-tabs"></div>
 
-          <div class="activity-filters">
-            <select id="activity-category-filter">
-              <option value="All">All categories</option>
-              <option value="Consultation">Consultation</option>
-              <option value="Medication Safety Review">
-                Medication Safety Review
-              </option>
-              <option value="Medication Management">
-                Medication Management
-              </option>
-              <option value="Patient Connection">Patient Connection</option>
-              <option value="Account">Account &amp; Profile</option>
-            </select>
-            <select id="activity-doctor-filter">
-              <option value="All">All doctors</option>
-            </select>
-            <select id="activity-status-filter">
-              <option value="All">All statuses</option>
-            </select>
-            <div class="date-range">
-              <input
-                type="date"
-                id="activity-date-from"
-                aria-label="From date"
-              />
-              <span class="filter-sep">to</span>
-              <input type="date" id="activity-date-to" aria-label="To date" />
-            </div>
-          </div>
+          <div class="activity-list" id="activity-list"></div>
 
-          <div class="table-wrap">
-            <table class="doctor-table">
-              <thead>
-                <tr>
-                  <th>Doctor</th>
-                  <th>Activity</th>
-                  <th>Category</th>
-                  <th>Patient</th>
-                  <th>Date &amp; time</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="activity-table-body"></tbody>
-            </table>
+          <div class="activity-load-more" id="activity-load-more">
+            <button
+              class="btn-load-more"
+              id="activity-load-more-btn"
+              type="button"
+            >
+              Show more
+            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ═══ Review panel (shared by both views) ═══ -->
+    <!-- ═══ Review panel (shared by both doctor views) ═══ -->
     <div class="overlay" id="overlay"></div>
     <div class="review-panel" id="review-panel">
       <div class="review-header">
@@ -566,35 +680,40 @@
           </div>
         </div>
 
-        <div class="reject-reason-field" id="reject-reason-field">
-          <label for="reject-reason-input"
-            >Reason for rejection (shown to the doctor)</label
+        <!-- Shared reason step — reused for Reject / Suspend / Move to Pending -->
+        <div class="reject-reason-field" id="action-reason-field">
+          <label for="action-reason-input" id="action-reason-label"
+            >Reason</label
           >
-          <textarea
-            id="reject-reason-input"
-            placeholder="e.g. Photo is blurry, license number doesn't match the name on record…"
-          ></textarea>
+          <textarea id="action-reason-input" placeholder=""></textarea>
         </div>
       </div>
 
       <div class="review-footer">
-        <button class="btn-cancel" id="btn-cancel" style="display: none">
+        <button class="btn-cancel" id="btn-cancel-action" style="display: none">
           Back
         </button>
         <button class="btn-reject" id="btn-reject">Reject</button>
+        <button class="btn-cancel" id="btn-suspend" style="display: none">
+          Suspend account
+        </button>
         <button
           class="btn-reject-confirm"
-          id="btn-reject-confirm"
+          id="btn-confirm-action"
           style="display: none"
         >
-          Confirm reject
+          Confirm
         </button>
         <button class="btn-approve" id="btn-approve">Approve doctor</button>
+        <button class="btn-approve" id="btn-reactivate" style="display: none">
+          Reactivate account
+        </button>
         <button class="btn-cancel" id="btn-move-pending" style="display: none">
           Move to Pending
         </button>
       </div>
     </div>
+
     <!-- ═══ Activity detail panel ═══ -->
     <div class="review-panel" id="activity-detail-panel">
       <div class="review-header">
@@ -606,9 +725,28 @@
           <div class="block-label">Details</div>
           <div class="claim-rows" id="activity-detail-rows"></div>
         </div>
+
+        <div
+          class="claim-block"
+          id="activity-changes-block"
+          style="display: none"
+        >
+          <div class="block-label">What changed</div>
+          <div class="changes-table" id="activity-changes"></div>
+        </div>
+
+        <div
+          class="claim-block"
+          id="activity-reason-block"
+          style="display: none"
+        >
+          <div class="block-label">Reason</div>
+          <div class="reason-text" id="activity-reason"></div>
+        </div>
       </div>
     </div>
 
+    <!-- ═══ Confirmation modals (reuse the same .confirm-modal component) ═══ -->
     <div class="confirm-modal" id="logout-confirm-modal">
       <div class="confirm-modal-icon">⎋</div>
       <h3>Sign out of the admin portal?</h3>
@@ -623,6 +761,37 @@
           type="button"
         >
           Sign out
+        </button>
+      </div>
+    </div>
+
+    <div class="confirm-modal" id="approve-confirm-modal">
+      <div class="confirm-modal-icon">✓</div>
+      <h3>Approve this doctor?</h3>
+      <p>
+        They'll get full account access immediately — able to post consultations
+        and connect with patients.
+      </p>
+      <div class="confirm-modal-actions">
+        <button class="btn-cancel" id="approve-cancel-btn" type="button">
+          Cancel
+        </button>
+        <button class="btn-approve" id="approve-confirm-btn" type="button">
+          Approve
+        </button>
+      </div>
+    </div>
+
+    <div class="confirm-modal" id="reactivate-confirm-modal">
+      <div class="confirm-modal-icon">✓</div>
+      <h3>Reactivate this account?</h3>
+      <p>The doctor will regain full access right away.</p>
+      <div class="confirm-modal-actions">
+        <button class="btn-cancel" id="reactivate-cancel-btn" type="button">
+          Cancel
+        </button>
+        <button class="btn-approve" id="reactivate-confirm-btn" type="button">
+          Reactivate
         </button>
       </div>
     </div>

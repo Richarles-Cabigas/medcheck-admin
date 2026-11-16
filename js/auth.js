@@ -8,6 +8,8 @@ import {
   getDatabase,
   ref,
   get,
+  push,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { firebaseConfig } from "./firebase-init.js";
 
@@ -60,6 +62,29 @@ togglePasswordBtn.addEventListener("click", () => {
   togglePasswordIcon.innerHTML = showingPassword ? EYE_OFF_ICON : EYE_ICON;
 });
 
+// Records a successful admin sign-in to the audit trail. Runs AFTER the
+// admin allowlist check has already passed, so the write satisfies the
+// activityLogs rule's admin branch. A failed log must never block the
+// admin from actually getting into the dashboard.
+async function logAdminSignIn(uid, email) {
+  try {
+    await push(ref(db, "activityLogs"), {
+      actorUid: uid,
+      actorName: email || "Admin",
+      actorRole: "admin",
+      activityType: "ADMIN_LOGIN",
+      category: "Admin Action",
+      description: `${email || "An admin"} signed in`,
+      status: "Signed in",
+      severity: "info",
+      timestamp: serverTimestamp(),
+      platform: "web-admin",
+    });
+  } catch (err) {
+    console.error("Couldn't write ADMIN_LOGIN audit log:", err);
+  }
+}
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   hideError();
@@ -103,7 +128,10 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
-    // Authorized — go to the dashboard
+    // Authorized — record it, then go to the dashboard. We don't await
+    // this ahead of the redirect in a blocking way other than the
+    // simple sequencing below, and a failure here never stops sign-in.
+    await logAdminSignIn(uid, cred.user.email);
     window.location.href = "dashboard.html";
   } catch (err) {
     setBusy(false);
