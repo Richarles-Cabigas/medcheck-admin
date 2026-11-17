@@ -158,6 +158,7 @@ const reactivateConfirmModal = document.getElementById(
 const reactivateCancelBtn = document.getElementById("reactivate-cancel-btn");
 const reactivateConfirmBtn = document.getElementById("reactivate-confirm-btn");
 
+const viewStats = document.getElementById("view-stats");
 const viewActivity = document.getElementById("view-activity");
 const activitySearchInput = document.getElementById("activity-search-input");
 const activityCategoryTabs = document.getElementById("activity-category-tabs");
@@ -250,7 +251,9 @@ navItems.forEach((item) => {
     const view = item.dataset.view;
     viewVerification.style.display = view === "verification" ? "block" : "none";
     viewDoctors.style.display = view === "doctors" ? "block" : "none";
+    viewStats.style.display = view === "stats" ? "block" : "none";
     viewActivity.style.display = view === "activity" ? "block" : "none";
+    if (view === "stats") resizeStatsCharts();
   });
 });
 // ── Live data ────────────────────────────────────────────────────────
@@ -295,6 +298,7 @@ function startListening() {
       renderVerificationView();
       renderSpecializationTabs();
       renderDoctorsView();
+      renderStatsView();
 
       // If the panel is open for a doctor whose data just changed
       // (e.g. edited in another tab), refresh the open panel too.
@@ -808,6 +812,138 @@ function renderDoctorsView() {
   }
 
   filtered.forEach((d) => doctorsTableBody.appendChild(buildRow(d)));
+}
+
+// ── Statistics charts ────────────────────────────────────────────────
+let funnelChart = null;
+let growthChart = null;
+let specChart = null;
+
+function renderStatsView() {
+  if (typeof Chart === "undefined") return; // CDN blocked/offline — skip quietly
+  renderFunnelChart();
+  renderGrowthChart();
+  renderSpecializationChart();
+}
+
+// Chart.js can't measure a canvas correctly while its container is
+// display:none (which it is until this tab is actually opened), so force
+// each chart to re-measure itself right after the tab becomes visible.
+function resizeStatsCharts() {
+  requestAnimationFrame(() => {
+    funnelChart?.resize();
+    growthChart?.resize();
+    specChart?.resize();
+  });
+}
+
+function renderFunnelChart() {
+  const counts = { Pending: 0, Verified: 0, Rejected: 0 };
+  allDoctors.forEach((d) => {
+    counts[d.verificationStatus] = (counts[d.verificationStatus] || 0) + 1;
+  });
+
+  const canvas = document.getElementById("chart-funnel");
+  if (!canvas) return;
+  if (funnelChart) funnelChart.destroy();
+  funnelChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: ["Pending", "Verified", "Verification Unsuccessful"],
+      datasets: [
+        {
+          data: [counts.Pending, counts.Verified, counts.Rejected],
+          backgroundColor: ["#f59e0b", "#16a34a", "#dc2626"],
+          borderRadius: 6,
+        },
+      ],
+    },
+    options: {
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+    },
+  });
+}
+
+function renderGrowthChart() {
+  const buckets = {}; // "YYYY-MM-DD" -> count
+  allDoctors.forEach((d) => {
+    if (!d.registeredAt) return;
+    const date = new Date(d.registeredAt);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    buckets[key] = (buckets[key] || 0) + 1;
+  });
+
+  const sortedKeys = Object.keys(buckets).sort();
+  const labels = sortedKeys.map((k) => {
+    const [y, m, day] = k.split("-");
+    return new Date(Number(y), Number(m) - 1, Number(day)).toLocaleString(
+      undefined,
+      { month: "short", day: "numeric" },
+    );
+  });
+  const data = sortedKeys.map((k) => buckets[k]);
+
+  const canvas = document.getElementById("chart-growth");
+  if (!canvas) return;
+  if (growthChart) growthChart.destroy();
+  growthChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "New doctors",
+          data,
+          borderColor: "#1d4ed8",
+          backgroundColor: "rgba(29,78,216,0.1)",
+          tension: 0.3,
+          fill: true,
+          pointRadius: 3,
+        },
+      ],
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    },
+  });
+}
+
+function renderSpecializationChart() {
+  const specs = buildSpecializationList(allDoctors);
+  const data = specs.map(
+    (spec) => allDoctors.filter((d) => doctorMatchesSpec(d, spec)).length,
+  );
+
+  const canvas = document.getElementById("chart-specialization");
+  if (!canvas) return;
+  if (specChart) specChart.destroy();
+  specChart = new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels: specs,
+      datasets: [
+        {
+          data,
+          backgroundColor: [
+            "#1d4ed8",
+            "#16a34a",
+            "#f59e0b",
+            "#dc2626",
+            "#6d28d9",
+            "#be185d",
+            "#0891b2",
+            "#65a30d",
+          ],
+        },
+      ],
+    },
+    options: {
+      plugins: { legend: { position: "right" } },
+    },
+  });
 }
 
 // ── Shared row / empty-state builders ───────────────────────────────

@@ -3,13 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MedCheck Admin — Doctor Verification</title>
+    <title>MedCheck Admin</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111827'/%3E%3Ctext x='32' y='43' font-family='Arial, sans-serif' font-size='26' font-weight='700' fill='white' text-anchor='middle'%3EMC%3C/text%3E%3C/svg%3E"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <style>
       .topbar #account-label {
         color: #6b7280;
@@ -168,6 +173,30 @@
       .doctor-table td {
         word-wrap: break-word;
         overflow-wrap: break-word;
+      }
+      /* ── Statistics page ── */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .stats-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 20px;
+      }
+      .stats-card h3 {
+        margin: 0 0 14px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .stats-card canvas {
+        max-height: 280px;
+      }
+      .stats-card-wide {
+        grid-column: 1 / -1;
       }
       /* ── Activity logs: single-row list (replaces the old table) ── */
       .activity-list {
@@ -458,6 +487,23 @@
             </span>
             Doctors
           </button>
+          <button class="nav-item" data-view="stats">
+            <span class="nav-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 3v18h18" />
+                <rect x="7" y="13" width="3" height="5" />
+                <rect x="12" y="9" width="3" height="9" />
+                <rect x="17" y="5" width="3" height="13" />
+              </svg>
+            </span>
+            Statistics
+          </button>
           <button class="nav-item" data-view="activity">
             <span class="nav-icon">
               <svg
@@ -573,6 +619,31 @@
               </thead>
               <tbody id="doctors-table-body"></tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- ═══ View: Statistics ═══ -->
+        <div class="page" id="view-stats" style="display: none">
+          <div class="page-header">
+            <div>
+              <h2>Statistics</h2>
+              <p>A snapshot of verification activity and the doctor base.</p>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stats-card">
+              <h3>Verification funnel</h3>
+              <canvas id="chart-funnel"></canvas>
+            </div>
+            <div class="stats-card">
+              <h3>Doctor registrations over time</h3>
+              <canvas id="chart-growth"></canvas>
+            </div>
+            <div class="stats-card stats-card-wide">
+              <h3>Doctors by specialization</h3>
+              <canvas id="chart-specialization"></canvas>
+            </div>
           </div>
         </div>
 
