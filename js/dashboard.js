@@ -1242,7 +1242,7 @@ function buildDocumentList(d) {
     docs.push({ label: "PRC ID — Back", url: d.prcIdBackImageUrl });
   }
   if (d.governmentIdImageUrl) {
-    docs.push({ label: "Government ID", url: d.governmentIdImageUrl });
+    docs.push({ label: "Government-issued ID", url: d.governmentIdImageUrl });
   }
   (d.supportingDocuments || []).forEach((doc, i) => {
     if (doc && doc.downloadUrl) {
