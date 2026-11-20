@@ -784,7 +784,7 @@ function renderVerificationView() {
 
   if (filtered.length === 0) {
     let icon = "✅";
-    let title = "Nothing waiting on you";
+    let title = "No Pending Doctor Verifications";
     let desc = "New doctor registrations will appear here for review.";
 
     if (verifySearchTerm) {
@@ -797,8 +797,8 @@ function renderVerificationView() {
       desc = "Approved accounts will be listed here.";
     } else if (activeStatusTab === "Rejected") {
       icon = "🗂️";
-      title = "No unsuccessful verifications";
-      desc = "Doctors whose verification wasn't approved will be listed here.";
+      title = "No Rejected Applications";
+      desc = "Doctor applications that have been rejected will appear here.";
     }
 
     verificationTableBody.appendChild(buildEmptyRow(icon, title, desc));
