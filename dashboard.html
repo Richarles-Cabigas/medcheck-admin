@@ -344,6 +344,14 @@
         background: #fee2e2;
         color: #991b1b;
       }
+      .badge.expiring-soon {
+        background: #fffbeb;
+        color: #92400e;
+      }
+      .badge.expired {
+        background: #fee2e2;
+        color: #991b1b;
+      }
 
       /* ── Activity toolbar: Clear / Export, right-aligned above the table ── */
       .activity-toolbar {
@@ -487,6 +495,21 @@
             </span>
             Doctors
           </button>
+          <button class="nav-item" data-view="renewals">
+            <span class="nav-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 12a9 9 0 1 0 2.64-6.36" />
+                <path d="M3 5v5h5" />
+              </svg>
+            </span>
+            License Renewals
+          </button>
           <button class="nav-item" data-view="stats">
             <span class="nav-icon">
               <svg
@@ -618,6 +641,51 @@
                 </tr>
               </thead>
               <tbody id="doctors-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ═══ View: License Renewals ═══ -->
+        <div class="page" id="view-renewals" style="display: none">
+          <div class="page-header">
+            <div>
+              <h2>License renewals</h2>
+              <p>
+                Doctors suspended because their PRC license has expired or is
+                expiring, waiting on an updated license.
+              </p>
+            </div>
+            <input
+              type="text"
+              id="renewals-search-input"
+              class="search-input"
+              placeholder="Search name, license, email…"
+            />
+          </div>
+
+          <div class="tabs" id="renewal-status-tabs">
+            <button class="tab active" data-renewal-status="awaiting-upload">
+              Awaiting Upload
+              <span class="count" id="count-awaiting-upload">0</span>
+            </button>
+            <button class="tab" data-renewal-status="pending-review">
+              Pending Review
+              <span class="count" id="count-pending-review">0</span>
+            </button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="doctor-table">
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Contact</th>
+                  <th>Specialization</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
+                </tr>
+              </thead>
+              <tbody id="renewals-table-body"></tbody>
             </table>
           </div>
         </div>
@@ -779,8 +847,12 @@
         <button class="btn-approve" id="btn-reactivate" style="display: none">
           Reactivate account
         </button>
-        <button class="btn-cancel" id="btn-move-pending" style="display: none">
-          Move to Pending
+        <button
+          class="btn-cancel"
+          id="btn-request-renewal"
+          style="display: none"
+        >
+          Request License Renewal
         </button>
       </div>
     </div>
@@ -840,9 +912,35 @@
       <div class="confirm-modal-icon">✓</div>
       <h3>Approve this doctor?</h3>
       <p>
-        They'll get full account access immediately — able to post consultations
+        They'll get full account access immediately - able to post consultations
         and connect with patients.
       </p>
+      <div class="field" style="text-align: left; margin-bottom: 16px">
+        <label
+          for="approve-expiry-input"
+          style="
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--slate-600);
+            margin-bottom: 6px;
+          "
+          >PRC license expiry date</label
+        >
+        <input
+          type="date"
+          id="approve-expiry-input"
+          style="
+            width: 100%;
+            height: 40px;
+            padding: 0 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+          "
+        />
+      </div>
       <div class="confirm-modal-actions">
         <button class="btn-cancel" id="approve-cancel-btn" type="button">
           Cancel

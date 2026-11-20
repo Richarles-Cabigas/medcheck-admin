@@ -30,6 +30,8 @@ let activeStatusTab = "Pending";
 let verifySearchTerm = "";
 let activeSpecTab = "All";
 let doctorsSearchTerm = "";
+let activeRenewalTab = "awaiting-upload";
+let renewalsSearchTerm = "";
 let activeReviewUid = null;
 let activeReasonAction = null; // null | "reject" | "suspend" | "move-pending"
 
@@ -51,6 +53,32 @@ const AVATAR_PALETTE = [
 const STATUS_DISPLAY_LABELS = { Rejected: "Verification Unsuccessful" };
 function displayLabel(status) {
   return STATUS_DISPLAY_LABELS[status] || status;
+}
+// Expiry status for a Verified doctor's PRC license.
+// null = no date on file / not applicable (e.g. not yet Verified).
+function getLicenseExpiryStatus(d) {
+  if (d.verificationStatus !== "Verified" || !d.licenseExpiryDate) return null;
+  const daysLeft = Math.ceil((d.licenseExpiryDate - Date.now()) / 86400000);
+  const dateStr = new Date(d.licenseExpiryDate).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  if (daysLeft < 0)
+    return {
+      label: `License expired ${dateStr}`,
+      cls: "expired",
+      daysLeft,
+      dateStr,
+    };
+  if (daysLeft <= 30)
+    return {
+      label: `Expires ${dateStr} (${daysLeft}d)`,
+      cls: "expiring-soon",
+      daysLeft,
+      dateStr,
+    };
+  return null;
 }
 
 function getInitials(name) {
@@ -103,6 +131,12 @@ const logoutBtn = document.getElementById("logout-btn");
 const navItems = document.querySelectorAll(".nav-item");
 const viewVerification = document.getElementById("view-verification");
 const viewDoctors = document.getElementById("view-doctors");
+const viewRenewals = document.getElementById("view-renewals");
+const renewalStatusTabButtons = document.querySelectorAll(
+  "#renewal-status-tabs .tab",
+);
+const renewalsSearchInput = document.getElementById("renewals-search-input");
+const renewalsTableBody = document.getElementById("renewals-table-body");
 
 const statusTabButtons = document.querySelectorAll("#status-tabs .tab");
 const verifySearchInput = document.getElementById("verify-search-input");
@@ -144,13 +178,14 @@ const btnCancelAction = document.getElementById("btn-cancel-action");
 
 const btnApprove = document.getElementById("btn-approve");
 const btnReject = document.getElementById("btn-reject");
-const btnMovePending = document.getElementById("btn-move-pending");
+const btnRequestRenewal = document.getElementById("btn-request-renewal");
 const btnSuspend = document.getElementById("btn-suspend");
 const btnReactivate = document.getElementById("btn-reactivate");
 
 const approveConfirmModal = document.getElementById("approve-confirm-modal");
 const approveCancelBtn = document.getElementById("approve-cancel-btn");
 const approveConfirmBtn = document.getElementById("approve-confirm-btn");
+const approveExpiryInput = document.getElementById("approve-expiry-input");
 
 const reactivateConfirmModal = document.getElementById(
   "reactivate-confirm-modal",
@@ -251,6 +286,7 @@ navItems.forEach((item) => {
     const view = item.dataset.view;
     viewVerification.style.display = view === "verification" ? "block" : "none";
     viewDoctors.style.display = view === "doctors" ? "block" : "none";
+    viewRenewals.style.display = view === "renewals" ? "block" : "none";
     viewStats.style.display = view === "stats" ? "block" : "none";
     viewActivity.style.display = view === "activity" ? "block" : "none";
     if (view === "stats") resizeStatsCharts();
@@ -292,12 +328,16 @@ function startListening() {
           reviewedAt: val.reviewedAt || 0,
           rejectionReason: val.rejectionReason || "",
           lastDecisionStatus: val.lastDecisionStatus || "",
+          licenseExpiryDate: val.licenseExpiryDate || 0,
+          suspensionCategory: val.suspensionCategory || "",
+          renewalSubmittedAt: val.renewalSubmittedAt || 0,
         });
       });
 
       renderVerificationView();
       renderSpecializationTabs();
       renderDoctorsView();
+      renderRenewalsView();
       renderStatsView();
 
       // If the panel is open for a doctor whose data just changed
@@ -382,7 +422,7 @@ const ACTIVITY_CATEGORY_MAP = {
   CREDENTIAL_UPDATE_REQUESTED: "Verification",
   ADMIN_DOCTOR_APPROVED: "Admin Action",
   ADMIN_DOCTOR_REJECTED: "Admin Action",
-  ADMIN_MOVED_TO_PENDING: "Admin Action",
+  ADMIN_REQUESTED_RENEWAL: "Admin Action",
   ADMIN_DOCTOR_SUSPENDED: "Admin Action",
   ADMIN_DOCTOR_REACTIVATED: "Admin Action",
   ADMIN_CREATED: "Admin Action",
@@ -398,7 +438,7 @@ const ACTIVITY_CATEGORY_MAP = {
 // Used only when an older log has no stored severity.
 const SEVERITY_BY_TYPE = {
   ADMIN_DOCTOR_REJECTED: "warning",
-  ADMIN_MOVED_TO_PENDING: "warning",
+  ADMIN_REQUESTED_RENEWAL: "warning",
   ADMIN_DOCTOR_SUSPENDED: "warning",
   ADMIN_REVOKED: "warning",
   ADMIN_CREATED: "warning",
@@ -521,6 +561,21 @@ function renderActivityCategoryTabs() {
       renderActivityCategoryTabs();
       renderActivityView();
     });
+  });
+
+  renewalStatusTabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeRenewalTab = btn.dataset.renewalStatus;
+      renewalStatusTabButtons.forEach((b) =>
+        b.classList.toggle("active", b === btn),
+      );
+      renderRenewalsView();
+    });
+  });
+
+  renewalsSearchInput.addEventListener("input", () => {
+    renewalsSearchTerm = renewalsSearchInput.value.trim().toLowerCase();
+    renderRenewalsView();
   });
 }
 function getFilteredActivities() {
@@ -825,6 +880,58 @@ function renderStatsView() {
   renderGrowthChart();
   renderSpecializationChart();
 }
+function renderRenewalsView() {
+  const isRenewalSuspended = (d) =>
+    d.verificationStatus === "Verified" &&
+    d.accountStatus === "Suspended" &&
+    d.suspensionCategory === "license-renewal";
+
+  const awaitingUpload = allDoctors.filter(
+    (d) => isRenewalSuspended(d) && !d.renewalSubmittedAt,
+  );
+  const pendingReview = allDoctors.filter(
+    (d) => isRenewalSuspended(d) && d.renewalSubmittedAt,
+  );
+
+  document.getElementById("count-awaiting-upload").textContent =
+    awaitingUpload.length;
+  document.getElementById("count-pending-review").textContent =
+    pendingReview.length;
+
+  let filtered =
+    activeRenewalTab === "awaiting-upload" ? awaitingUpload : pendingReview;
+
+  if (renewalsSearchTerm) {
+    filtered = filtered.filter(
+      (d) =>
+        d.name.toLowerCase().includes(renewalsSearchTerm) ||
+        d.licenseNumber.toLowerCase().includes(renewalsSearchTerm) ||
+        d.email.toLowerCase().includes(renewalsSearchTerm),
+    );
+  }
+
+  filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+  renewalsTableBody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    const icon = renewalsSearchTerm ? "🔍" : "✅";
+    const title = renewalsSearchTerm
+      ? "No matches"
+      : activeRenewalTab === "awaiting-upload"
+        ? "No one waiting on a renewal"
+        : "Nothing submitted yet";
+    const desc = renewalsSearchTerm
+      ? "No doctors match your search in this tab."
+      : activeRenewalTab === "awaiting-upload"
+        ? "Doctors you suspend for an expired or expiring license will appear here."
+        : "Doctors who've uploaded a renewed license will appear here for review.";
+    renewalsTableBody.appendChild(buildEmptyRow(icon, title, desc));
+    return;
+  }
+
+  filtered.forEach((d) => renewalsTableBody.appendChild(buildRow(d)));
+}
 
 // Chart.js can't measure a canvas correctly while its container is
 // display:none (which it is until this tab is actually opened), so force
@@ -971,9 +1078,14 @@ function buildRow(d) {
   const avatarColor = getAvatarColor(d.uid);
   const isSuspended =
     d.verificationStatus === "Verified" && d.accountStatus === "Suspended";
-  const displayStatus = isSuspended
-    ? "Suspended"
-    : displayLabel(d.verificationStatus);
+  const isRenewal = isSuspended && d.suspensionCategory === "license-renewal";
+  const displayStatus = isRenewal
+    ? d.renewalSubmittedAt
+      ? "Renewal Submitted"
+      : "Renewal Pending"
+    : isSuspended
+      ? "Suspended"
+      : displayLabel(d.verificationStatus);
   const badgeClass = isSuspended
     ? "suspended"
     : d.verificationStatus.toLowerCase();
@@ -1002,10 +1114,19 @@ function buildRow(d) {
       </div>
     </td>
     <td>${escapeHtml(d.specialization)}</td>
-    <td><span class="badge ${badgeClass}">${escapeHtml(displayStatus)}</span></td>
+      <td>
+      <span class="badge ${badgeClass}">${escapeHtml(displayStatus)}</span>
+      ${expiryBadgeHtml(d)}
+    </td>
     <td class="doctor-row-date">${dateStr}</td>
   `;
   return tr;
+}
+
+function expiryBadgeHtml(d) {
+  const exp = getLicenseExpiryStatus(d);
+  if (!exp) return "";
+  return `<span class="badge ${exp.cls}" style="margin-left:4px;">${escapeHtml(exp.label)}</span>`;
 }
 
 // ── Review panel: which action buttons show for the doctor's state ──
@@ -1020,8 +1141,9 @@ function applyReviewButtonsForState(d) {
 
   btnApprove.style.display = isPending ? "block" : "none";
   btnReject.style.display = isPending ? "block" : "none";
-  btnMovePending.style.display = isPending ? "none" : "block";
   btnSuspend.style.display = isVerified && !isSuspended ? "block" : "none";
+  btnRequestRenewal.style.display =
+    isVerified && !isSuspended ? "block" : "none";
   btnReactivate.style.display = isSuspended ? "block" : "none";
 }
 
@@ -1045,7 +1167,9 @@ function openReviewPanel(d, fromRefresh) {
   reviewNameEl.textContent = d.name;
   claimName.textContent = d.name;
   claimTitle.textContent = d.professionalTitle || "—";
-  claimLicense.textContent = d.licenseNumber;
+  claimLicense.textContent = d.licenseExpiryDate
+    ? `${d.licenseNumber} · expires ${new Date(d.licenseExpiryDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+    : d.licenseNumber;
   claimSpecialization.textContent = d.specialization;
   claimExperience.textContent = d.yearsOfExperience
     ? `${d.yearsOfExperience} ${d.yearsOfExperience === "1" ? "year" : "years"}`
@@ -1208,6 +1332,7 @@ document.addEventListener("keydown", (e) => {
 // ── Approve — confirm step (parity with sign-out / suspend) ─────────
 btnApprove.addEventListener("click", () => {
   if (!activeReviewUid) return;
+  approveExpiryInput.value = "";
   overlay.classList.add("visible");
   approveConfirmModal.classList.add("visible");
 });
@@ -1218,9 +1343,15 @@ approveCancelBtn.addEventListener("click", () => {
 });
 
 approveConfirmBtn.addEventListener("click", async () => {
+  const expiryStr = approveExpiryInput.value;
+  if (!expiryStr) {
+    showToast("Enter the PRC license expiry date to continue.", true);
+    return;
+  }
+  const licenseExpiryDate = new Date(expiryStr + "T00:00:00").getTime();
   overlay.classList.remove("visible");
   approveConfirmModal.classList.remove("visible");
-  await submitDecision("Verified", "");
+  await submitDecision("Verified", "", licenseExpiryDate);
 });
 
 // ── Shared reason step: Reject / Suspend / Move to Pending ──────────
@@ -1236,11 +1367,11 @@ const REASON_STEP_CONFIG = {
     placeholder: "e.g. Multiple patient complaints, license flagged by PRC…",
     confirmText: "Confirm suspension",
   },
-  "move-pending": {
-    label: "Reason for sending back to Pending",
+  "request-renewal": {
+    label: "Renewal note (kept in the audit log, shown to the doctor)",
     placeholder:
-      "e.g. New documents need review, discrepancy found after approval…",
-    confirmText: "Confirm move to Pending",
+      "e.g. PRC license expired on [date] — please upload your renewed license.",
+    confirmText: "Request renewal",
   },
 };
 
@@ -1260,7 +1391,7 @@ function openReasonStep(action) {
   btnReject.style.display = "none";
   btnSuspend.style.display = "none";
   btnReactivate.style.display = "none";
-  btnMovePending.style.display = "none";
+  btnRequestRenewal.style.display = "none";
   actionReasonInput.focus();
 }
 
@@ -1272,7 +1403,9 @@ function closeReasonStep() {
 
 btnReject.addEventListener("click", () => openReasonStep("reject"));
 btnSuspend.addEventListener("click", () => openReasonStep("suspend"));
-btnMovePending.addEventListener("click", () => openReasonStep("move-pending"));
+btnRequestRenewal.addEventListener("click", () =>
+  openReasonStep("request-renewal"),
+);
 btnCancelAction.addEventListener("click", closeReasonStep);
 
 btnConfirmAction.addEventListener("click", async () => {
@@ -1285,12 +1418,12 @@ btnConfirmAction.addEventListener("click", async () => {
     await submitDecision("Rejected", reason);
   } else if (activeReasonAction === "suspend") {
     await submitSuspend(reason);
-  } else if (activeReasonAction === "move-pending") {
-    await submitMoveToPending(reason);
+  } else if (activeReasonAction === "request-renewal") {
+    await submitRequestRenewal(reason);
   }
 });
 
-async function submitDecision(status, reason) {
+async function submitDecision(status, reason, licenseExpiryDate) {
   const uid = activeReviewUid;
   approveConfirmBtn.disabled = true;
   btnConfirmAction.disabled = true;
@@ -1304,6 +1437,9 @@ async function submitDecision(status, reason) {
     lastDecisionStatus: null,
     moveToPendingReason: null,
   };
+  if (status === "Verified" && licenseExpiryDate) {
+    payload.licenseExpiryDate = licenseExpiryDate;
+  }
 
   try {
     const before = allDoctors.find((x) => x.uid === uid);
@@ -1345,48 +1481,49 @@ async function submitDecision(status, reason) {
   }
 }
 
-// ── Move back to Pending (from an already-decided doctor) ───────────
-async function submitMoveToPending(reason) {
+async function submitRequestRenewal(reason) {
   const uid = activeReviewUid;
   const doctor = allDoctors.find((d) => d.uid === uid);
   if (!doctor) return;
 
   btnConfirmAction.disabled = true;
 
-  const payload = {
-    verificationStatus: "Pending",
-    lastDecisionStatus: doctor.verificationStatus,
-    moveToPendingReason: reason,
-  };
-
   try {
-    await update(ref(db, uid), payload);
+    await update(ref(db, uid), {
+      accountStatus: "Suspended",
+      suspensionReason: reason,
+      suspensionCategory: "license-renewal",
+    });
     await writeAuditLog({
-      activityType: "ADMIN_MOVED_TO_PENDING",
+      activityType: "ADMIN_REQUESTED_RENEWAL",
       category: "Admin Action",
-      description: `Moved ${doctor.name} back to Pending`,
-      status: "Pending",
+      description: `Requested license renewal from ${doctor.name}`,
+      status: "Renewal requested",
       severity: "warning",
       targetUid: uid,
       targetName: doctor.name,
       reason,
       changes: {
-        verificationStatus: { from: doctor.verificationStatus, to: "Pending" },
+        accountStatus: {
+          from: doctor.accountStatus || "Active",
+          to: "Suspended",
+        },
       },
     });
-    showToast("Doctor moved back to Pending for re-review.");
+    showToast(
+      "Renewal requested — account suspended until the doctor uploads an updated license.",
+    );
     closeReviewPanel();
   } catch (err) {
     console.error(err);
     showToast(
-      "Couldn't move this doctor to Pending. Check your connection and try again.",
+      "Couldn't request renewal. Check your connection and try again.",
       true,
     );
   } finally {
     btnConfirmAction.disabled = false;
   }
 }
-
 // ── Suspend / Reactivate — a lever independent of verification ──────
 async function submitSuspend(reason) {
   const uid = activeReviewUid;
@@ -1457,6 +1594,8 @@ async function submitReactivate() {
     await update(ref(db, uid), {
       accountStatus: "Active",
       suspensionReason: null,
+      suspensionCategory: null,
+      renewalSubmittedAt: null,
     });
     await writeAuditLog({
       activityType: "ADMIN_DOCTOR_REACTIVATED",

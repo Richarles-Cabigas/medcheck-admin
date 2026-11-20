@@ -4,11 +4,14 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
 import {
   getDatabase,
   ref,
   get,
   push,
+  remove,
+  runTransaction,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { firebaseConfig } from "./firebase-init.js";
@@ -37,6 +40,103 @@ const EYE_OFF_ICON = `
   <line x1="1" y1="1" x2="23" y2="23"/>
 `;
 
+const MAX_FAILED_ATTEMPTS = 3;
+const LOCKOUT_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const COMMON_TLDS = new Set([
+  "com",
+  "net",
+  "org",
+  "edu",
+  "gov",
+  "mil",
+  "int",
+  "info",
+  "biz",
+  "co",
+  "io",
+  "me",
+  "dev",
+  "app",
+  "ph",
+  "us",
+  "uk",
+  "ca",
+  "au",
+  "nz",
+  "sg",
+  "in",
+  "jp",
+  "cn",
+  "de",
+  "fr",
+  "es",
+  "it",
+  "nl",
+  "se",
+  "no",
+  "dk",
+  "fi",
+  "ru",
+  "br",
+  "mx",
+  "ke",
+  "za",
+]);
+// Extend this list if a legitimate admin email uses a TLD not covered here.
+
+function hasValidTld(email) {
+  const domain = email.split("@")[1] || "";
+  const parts = domain.split(".");
+  if (parts.length < 2) return false;
+  return COMMON_TLDS.has(parts[parts.length - 1].toLowerCase());
+}
+
+// Firebase RTDB keys can't contain . # $ [ ] /
+function sanitizeEmailKey(email) {
+  return email.toLowerCase().replace(/[.#$[\]/]/g, ",");
+}
+
+function formatRemaining(ms) {
+  const totalSeconds = Math.max(1, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"}${seconds > 0 ? ` ${seconds}s` : ""}`;
+  }
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
+}
+
+function buildLockoutMessage(lockedUntil) {
+  return `Too many failed attempts. This account is temporarily locked. Please try again in ${formatRemaining(lockedUntil - Date.now())}.`;
+}
+
+// Atomically bumps the fail count for this email and locks it once the
+// threshold is hit. Runs unauthenticated (the user hasn't signed in yet),
+// so loginAttempts/* in the DB rules must allow unauthenticated read/write —
+// same as the mobile app's existing lockout node.
+async function registerFailedAttempt(key) {
+  const attemptRef = ref(db, `loginAttempts/${key}`);
+  const result = await runTransaction(attemptRef, (current) => {
+    const now = Date.now();
+    const failCount = (current?.failCount || 0) + 1;
+    return failCount >= MAX_FAILED_ATTEMPTS
+      ? { failCount, lockedUntil: now + LOCKOUT_DURATION_MS }
+      : { failCount, lockedUntil: current?.lockedUntil || null };
+  });
+  return result.snapshot.val();
+}
+
+async function clearLoginAttempts(key) {
+  try {
+    await remove(ref(db, `loginAttempts/${key}`));
+  } catch {
+    // non-fatal — a leftover attempts node just means the next failed
+    // login (if any) starts counting from a stale base
+  }
+}
+
 function showError(message) {
   errorBox.textContent = message;
   errorBox.classList.add("visible");
@@ -62,6 +162,35 @@ togglePasswordBtn.addEventListener("click", () => {
   togglePasswordIcon.innerHTML = showingPassword ? EYE_OFF_ICON : EYE_ICON;
 });
 
+let lockoutIntervalId = null;
+
+function stopLockoutCountdown() {
+  if (lockoutIntervalId) {
+    clearInterval(lockoutIntervalId);
+    lockoutIntervalId = null;
+  }
+}
+
+function startLockoutCountdown(lockedUntil) {
+  stopLockoutCountdown();
+  submitBtn.textContent = "Sign in";
+  submitBtn.disabled = true;
+
+  const tick = () => {
+    const remaining = lockedUntil - Date.now();
+    if (remaining <= 0) {
+      stopLockoutCountdown();
+      hideError();
+      submitBtn.disabled = false;
+      return;
+    }
+    showError(buildLockoutMessage(lockedUntil));
+  };
+
+  tick();
+  lockoutIntervalId = setInterval(tick, 1000);
+}
+
 // Records a successful admin sign-in to the audit trail. Runs AFTER the
 // admin allowlist check has already passed, so the write satisfies the
 // activityLogs rule's admin branch. A failed log must never block the
@@ -85,16 +214,15 @@ async function logAdminSignIn(uid, email) {
   }
 }
 
+// NEW
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   hideError();
+  stopLockoutCountdown();
 
   const email = emailInput.value.trim();
   const password = passwordInput.value;
 
-  // Client-side check first — without this, an empty password gets
-  // sent straight to Firebase and comes back as an unhelpful generic
-  // error instead of telling the admin what's actually missing.
   if (!email && !password) {
     showError("Please enter your email and password.");
     return;
@@ -104,19 +232,38 @@ form.addEventListener("submit", async (e) => {
     emailInput.focus();
     return;
   }
+  if (!EMAIL_REGEX.test(email) || !hasValidTld(email)) {
+    showError("Please enter a valid email address.");
+    emailInput.focus();
+    return;
+  }
   if (!password) {
     showError("Please enter your password.");
     passwordInput.focus();
     return;
   }
 
+  const key = sanitizeEmailKey(email);
   setBusy(true);
+
+  // Lockout check BEFORE spending a Firebase auth attempt
+  try {
+    const attemptSnap = await get(ref(db, `loginAttempts/${key}`));
+    const state = attemptSnap.exists() ? attemptSnap.val() : null;
+    if (state?.lockedUntil && state.lockedUntil > Date.now()) {
+      setBusy(false);
+      startLockoutCountdown(state.lockedUntil);
+      return;
+    }
+  } catch (err) {
+    console.error("Couldn't check lockout state:", err);
+    // don't block sign-in just because the lockout check failed
+  }
 
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password);
     const uid = cred.user.uid;
 
-    // Check the admin allowlist
     const adminSnap = await get(ref(db, `admins/${uid}`));
 
     if (!adminSnap.exists() || adminSnap.val() !== true) {
@@ -128,28 +275,38 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
-    // Authorized — record it, then go to the dashboard. We don't await
-    // this ahead of the redirect in a blocking way other than the
-    // simple sequencing below, and a failure here never stops sign-in.
+    await clearLoginAttempts(key);
+    stopLockoutCountdown();
     await logAdminSignIn(uid, cred.user.email);
     window.location.href = "dashboard.html";
   } catch (err) {
     setBusy(false);
     const code = err?.code || "";
 
+    const isBadCredential =
+      code === "auth/invalid-credential" ||
+      code === "auth/wrong-password" ||
+      code === "auth/user-not-found";
+
     if (code === "auth/invalid-email") {
-      showError("That email address doesn't look right.");
+      showError("Please enter a valid email address.");
     } else if (
       code === "auth/missing-password" ||
       code === "auth/missing-email"
     ) {
       showError("Please enter your email and password.");
-    } else if (
-      code === "auth/invalid-credential" ||
-      code === "auth/wrong-password" ||
-      code === "auth/user-not-found"
-    ) {
-      showError("Incorrect email or password.");
+    } else if (isBadCredential) {
+      try {
+        const updated = await registerFailedAttempt(key);
+        if (updated?.lockedUntil && updated.lockedUntil > Date.now()) {
+          startLockoutCountdown(updated.lockedUntil);
+        } else {
+          showError("Invalid email or password.");
+        }
+      } catch (lockoutErr) {
+        console.error("Couldn't record failed attempt:", lockoutErr);
+        showError("Invalid email or password.");
+      }
     } else if (code === "auth/too-many-requests") {
       showError(
         "Too many failed attempts. Please wait a few minutes and try again.",
@@ -157,7 +314,9 @@ form.addEventListener("submit", async (e) => {
     } else if (code === "auth/network-request-failed") {
       showError("Network error — check your connection and try again.");
     } else {
-      showError("Something went wrong signing in. Please try again.");
+      showError(
+        "Something went wrong on our end. Please try again in a moment.",
+      );
       console.error(err);
     }
   }
