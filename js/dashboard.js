@@ -920,12 +920,12 @@ function renderRenewalsView() {
       ? "No matches"
       : activeRenewalTab === "awaiting-upload"
         ? "No one waiting on a renewal"
-        : "Nothing submitted yet";
+        : "No Pending Renewal Submissions";
     const desc = renewalsSearchTerm
       ? "No doctors match your search in this tab."
       : activeRenewalTab === "awaiting-upload"
         ? "Doctors you suspend for an expired or expiring license will appear here."
-        : "Doctors who've uploaded a renewed license will appear here for review.";
+        : "Doctor license renewal submissions awaiting admin review will appear here.";
     renewalsTableBody.appendChild(buildEmptyRow(icon, title, desc));
     return;
   }
